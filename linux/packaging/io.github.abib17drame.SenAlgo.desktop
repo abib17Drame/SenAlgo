@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Name=SenAlgo
+GenericName=Environnement d'algorithmique
+Comment=Écrire, exécuter et déboguer des algorithmes en pseudocode français
+# Une seule catégorie principale (Development), sinon l'application apparaît
+# en double dans le menu. IDE en est une sous-catégorie.
+Categories=Development;IDE;
+Keywords=algorithme;pseudocode;programmation;étudiant;éducation;
+Terminal=false
+StartupNotify=true
+
+# Le nom de l'icône, sans extension : il est résolu dans le thème hicolor.
+Icon=io.github.abib17drame.SenAlgo
+
+# StartupWMClass doit correspondre à l'identifiant d'application déclaré dans
+# linux/CMakeLists.txt. C'est par cette valeur que GNOME rattache la fenêtre
+# ouverte à cette entrée, et donc à son icône.
+StartupWMClass=io.github.abib17drame.SenAlgo
+
+# Chemin renseigné à l'installation : il dépend de l'emplacement choisi.
+Exec=@EXEC@ %f

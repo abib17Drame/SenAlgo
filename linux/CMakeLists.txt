@@ -7,7 +7,10 @@ project(runner LANGUAGES CXX)
 set(BINARY_NAME "senalgo")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "com.example.senalgo")
+# Identifiant inversé façon DNS. Il doit correspondre EXACTEMENT au nom du
+# fichier .desktop installé, faute de quoi GNOME n'associe pas la fenêtre à
+# l'application et affiche une icône générique.
+set(APPLICATION_ID "io.github.abib17drame.SenAlgo")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -95,6 +98,15 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
+  COMPONENT Runtime)
+
+# Icône de la fenêtre, chargée au démarrage par set_default_window_icon()
+# dans runner/my_application.cc. Elle est déposée ici plutôt que déclarée
+# comme asset Flutter, afin de ne pas alourdir inutilement les paquets des
+# autres plateformes.
+install(FILES "${CMAKE_SOURCE_DIR}/../assets/icon/icon_256.png"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
+  RENAME "app_icon.png"
   COMPONENT Runtime)
 
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

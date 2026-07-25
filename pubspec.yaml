@@ -45,6 +45,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -57,6 +58,27 @@ dev_dependencies:
   build_runner: ^2.10.5
   custom_lint: ^0.8.1
   riverpod_lint: ^3.1.0
+
+# Génération des icônes de l'application à partir de assets/icon/.
+# Après toute modification du logo, relancer : dart run flutter_launcher_icons
+flutter_launcher_icons:
+  # Image pleine page : le fond touche les quatre bords. C'est le système qui
+  # applique l'arrondi et l'ombre, différemment selon la plateforme.
+  image_path: "assets/icon/icon.png"
+
+  android: true
+  ios: false # pas de dossier ios/ dans ce projet
+  web:
+    generate: true
+    background_color: "#0D0D0D"
+    theme_color: "#00FFFF"
+
+  # Icône adaptative Android : le système compose lui-même l'arrière-plan et
+  # le calque avant, puis rogne l'ensemble en cercle, en carré arrondi ou en
+  # goutte selon le lanceur. Le calque avant a donc un fond transparent et un
+  # motif réduit à la zone garantie visible.
+  adaptive_icon_background: "#0D0D0D"
+  adaptive_icon_foreground: "assets/icon/foreground.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

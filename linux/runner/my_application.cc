@@ -5,7 +5,37 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include <limits.h>
+#include <unistd.h>
+
 #include "flutter/generated_plugin_registrant.h"
+
+// Définit l'icône affichée dans la barre de titre, le sélecteur de fenêtres
+// et le dock.
+//
+// `flutter_launcher_icons` ne gère pas Linux : l'icône doit être posée à la
+// main. Le chemin est résolu à partir de l'exécutable et non du répertoire
+// courant, qui n'est pas garanti quand l'application est lancée depuis un
+// menu ou un raccourci. Le fichier est déposé dans le bundle par la règle
+// d'installation de linux/CMakeLists.txt.
+static void set_default_window_icon() {
+  char exe_path[PATH_MAX];
+  ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+  if (len <= 0) {
+    return;
+  }
+  exe_path[len] = '\0';
+
+  g_autofree gchar* dir = g_path_get_dirname(exe_path);
+  g_autofree gchar* icon_path =
+      g_build_filename(dir, "data", "app_icon.png", nullptr);
+
+  g_autoptr(GError) error = nullptr;
+  if (!gtk_window_set_default_icon_from_file(icon_path, &error)) {
+    g_warning("Icône de fenêtre introuvable (%s) : %s", icon_path,
+              error->message);
+  }
+}
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -22,6 +52,7 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+  set_default_window_icon();
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -45,11 +76,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "senalgo");
+    gtk_header_bar_set_title(header_bar, "SenAlgo");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "senalgo");
+    gtk_window_set_title(window, "SenAlgo");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
