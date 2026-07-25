@@ -1,0 +1,219 @@
+name: Release
+
+# Déclenché par un tag de version (v1.0.0, v1.2.3-beta...), ou manuellement
+# depuis l'onglet Actions pour vérifier que tout compile sans publier.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# Nécessaire pour que le dernier job puisse créer la release.
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.41.9"
+
+jobs:
+  # Barrière qualité : inutile de fabriquer trois paquets si le code est cassé.
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      # Les tests de traduction exécutent réellement le Python produit.
+      - run: python3 --version
+      - run: flutter test
+
+  linux:
+    name: Linux
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Dépendances de compilation du bureau Linux, absentes de l'image par défaut.
+      - name: Dépendances GTK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build linux --release
+
+      # Le moteur Flutter est livré avec ses symboles de débogage : sans cette
+      # étape, libflutter_linux_gtk.so pèse 92 Mo au lieu de 40.
+      - name: Alléger les binaires
+        run: |
+          avant=$(du -sm build/linux/x64/release/bundle | cut -f1)
+          strip --strip-unneeded build/linux/x64/release/bundle/lib/*.so || true
+          apres=$(du -sm build/linux/x64/release/bundle | cut -f1)
+          echo "Bundle : ${avant} Mo -> ${apres} Mo"
+
+      - name: Empaqueter
+        run: |
+          cd build/linux/x64/release
+          mv bundle SenAlgo
+          # L'entrée de bureau et son installeur accompagnent l'archive, pour
+          # que l'utilisateur puisse intégrer l'app à son menu s'il le souhaite.
+          mkdir -p SenAlgo/packaging
+          cp "$GITHUB_WORKSPACE"/linux/packaging/* SenAlgo/packaging/
+          tar -czf SenAlgo-linux-x64.tar.gz SenAlgo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: build/linux/x64/release/SenAlgo-linux-x64.tar.gz
+
+  windows:
+    name: Windows
+    needs: tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build windows --release
+
+      - name: Empaqueter
+        shell: pwsh
+        run: |
+          $src = "build\windows\x64\runner\Release"
+          Rename-Item $src "SenAlgo"
+          Compress-Archive -Path "build\windows\x64\runner\SenAlgo" `
+                           -DestinationPath "SenAlgo-windows-x64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: SenAlgo-windows-x64.zip
+
+  android:
+    name: Android
+    needs: tests
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # Signature de publication. Sans ces secrets, Gradle retombe sur la clé
+      # de débogage : l'APK s'installe, mais comme cette clé est régénérée à
+      # chaque exécution, une mise à jour par-dessus une version précédente
+      # sera refusée par Android.
+      - name: Préparer la clé de signature
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+          echo "Signature de publication activée."
+
+      - name: Avertir si non signé
+        if: env.KEYSTORE_BASE64 == ''
+        run: |
+          echo "::warning::APK signé avec la clé de débogage : une mise à jour par-dessus une installation existante sera refusée par Android. Voir docs/RELEASE.md."
+
+      - run: flutter pub get
+
+      # Un APK par architecture (plus léger à télécharger) et un APK universel
+      # pour ceux qui ne savent pas quelle architecture a leur téléphone.
+      - run: flutter build apk --release --split-per-abi
+      - run: flutter build apk --release
+
+      - name: Renommer
+        run: |
+          cd build/app/outputs/flutter-apk
+          for f in app-*-release.apk; do
+            [ -e "$f" ] || continue
+            abi=$(echo "$f" | sed 's/app-\(.*\)-release.apk/\1/')
+            mv "$f" "SenAlgo-$abi.apk"
+          done
+          [ -e app-release.apk ] && mv app-release.apk SenAlgo-universal.apk
+          ls -la
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: build/app/outputs/flutter-apk/SenAlgo-*.apk
+
+  release:
+    name: Publier la release
+    needs: [linux, windows, android]
+    # Une exécution manuelle sert à vérifier la compilation : elle ne publie rien.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: paquets
+
+      - run: find paquets -type f | sort
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: paquets/**/*
+          generate_release_notes: true
+          body: |
+            ## Téléchargements
+
+            | Plateforme | Fichier |
+            |---|---|
+            | **Linux** (x64) | `SenAlgo-linux-x64.tar.gz` |
+            | **Windows** (x64) | `SenAlgo-windows-x64.zip` |
+            | **Android** | `SenAlgo-universal.apk` |
+
+            ### Installation
+
+            **Linux** — extraire l'archive puis lancer `./SenAlgo`.
+            Pour l'ajouter au menu des applications :
+            `./packaging/install-desktop-entry.sh .`
+
+            **Windows** — extraire le dossier et lancer `senalgo.exe`.
+            SmartScreen affichera un avertissement : l'exécutable n'est pas
+            signé par un certificat payant. Cliquer sur « Informations
+            complémentaires » puis « Exécuter quand même ».
+
+            **Android** — installer `SenAlgo-universal.apk`. Il faut autoriser
+            l'installation d'applications de sources inconnues. Les variantes
+            `armeabi-v7a`, `arm64-v8a` et `x86_64` sont plus légères si vous
+            connaissez l'architecture de votre appareil.

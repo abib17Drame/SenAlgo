@@ -68,6 +68,9 @@ flutter_launcher_icons:
 
   android: true
   ios: false # pas de dossier ios/ dans ce projet
+  windows:
+    generate: true
+    icon_size: 256
   web:
     generate: true
     background_color: "#0D0D0D"
