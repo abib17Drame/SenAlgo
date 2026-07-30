@@ -1,0 +1,52 @@
+name: CI
+
+# Déclenché à chaque poussée sur main et à chaque pull request.
+#
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deux push rapprochées sur la même brancheseule la dernière compte.
+# Annuler l'exécution précédente évite d'attendre un résultat déjà périmé.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.41.9"
+
+jobs:
+  verifications:
+    name: Analyse et tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Analyse statique
+        run: flutter analyze
+
+      # Les tests du transpileur écrivent le Python produit dans un fichier
+      # temporaire et l'exécutent réellement pour comparer sa sortie à celle
+      # de l'interpréteur. Sans python3, ces tests échouent avec une erreur
+      # de processus peu parlante : autant vérifier sa présence d'abord.
+      - name: Vérifier la présence de Python
+        run: python3 --version
+
+      - name: Tests
+        run: flutter test

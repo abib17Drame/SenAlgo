@@ -1,5 +1,7 @@
 # SenAlgo
 
+[![CI](https://github.com/abib17Drame/SenAlgo/actions/workflows/ci.yml/badge.svg)](https://github.com/abib17Drame/SenAlgo/actions/workflows/ci.yml)
+
 Un environnement de développement pour l'**algorithmique en pseudocode français**
 
 Écrire un algorithme sur une feuille ne dit pas s'il est juste. SenAlgo permet de le **taper**, de l'**exécuter**, de le **dérouler pas à pas** en regardant les variables changer, puis de le **traduire en Python** pour faire le pont avec un vrai langage de programmation.
