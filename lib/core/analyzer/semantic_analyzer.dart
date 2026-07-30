@@ -456,6 +456,9 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
 
       case TokenType.MOINS:
       case TokenType.FOIS:
+      // La puissance suit la même règle : deux entiers donnent un entier,
+      // un réel quelque part donne un réel.
+      case TokenType.PUISSANCE:
         return _resultatArithmetique(g, d, op);
 
       case TokenType.DIVISE:

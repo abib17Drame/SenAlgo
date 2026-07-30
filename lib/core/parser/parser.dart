@@ -485,7 +485,20 @@ class Parser {
   }
   ASTNode _unary() {
     if (_match(TokenType.NON) || _match(TokenType.MOINS)) { final op = _previous(); final right = _unary(); return UnaryNode(operator: op, right: right); }
-    return _call();
+    return _power();
+  }
+  /// La puissance est plus prioritaire que le moins unaire  `-2^2` vaut `-4`
+  /// et associative **à droite** : `2^3^2` vaut `2^(3^2)`, soit 512.
+  ///
+  /// L'associativité à droite vient de l'appel récursif à [_unary] plutôt que
+  /// d'une boucle ; ce même appel permet d'écrire `2^-3`.
+  ASTNode _power() {
+    final expr = _call();
+    if (_check(TokenType.PUISSANCE) && _poursuitExpression()) {
+      final op = _advance();
+      return BinaryNode(left: expr, operator: op, right: _unary());
+    }
+    return expr;
   }
   ASTNode _call() {
     var expr = _primary();

@@ -3,6 +3,11 @@ import '../lexer/token.dart';
 import 'environment.dart';
 import 'dart:math' as math;
 
+/// Signal levé lorsque l'utilisateur demande l'arrêt de l'exécution. Ce n'est
+/// pas une erreur du programme : l'appelant le reconnaît et l'affiche comme un
+/// arrêt volontaire plutôt que comme un échec.
+const String kStoppedByUserSignal = "__SENALGO_STOPPED_BY_USER__";
+
 class Interpreter implements ASTVisitor<dynamic> {
   Environment environment = Environment();
   final Function(String) onPrint;
@@ -12,11 +17,56 @@ class Interpreter implements ASTVisitor<dynamic> {
 
   Interpreter({required this.onPrint, required this.onRead, this.onVariableChanged, this.onStatement});
 
+  /// Passe à vrai quand [demanderArret] est appelé. Vérifié avant chaque
+  /// instruction : c'est ce qui permet d'interrompre une boucle infinie.
+  bool _arretDemande = false;
+
+  /// Mesure le temps écoulé depuis la dernière fois que l'interpréteur a rendu
+  /// la main à la boucle d'événements.
+  final Stopwatch _chrono = Stopwatch();
+
+  /// Durée maximale pendant laquelle l'interpréteur peut monopoliser le fil
+  /// d'exécution. 16 ms correspond à une image à 60 par seconde : au-delà,
+  /// l'interface commencerait à saccader.
+  static const int _msMaxSansRespiration = 16;
+
+  /// Demande l'arrêt de l'exécution en cours.
+  ///
+  /// L'arrêt n'est pas immédiat : il prend effet au prochain point de contrôle,
+  /// c'est-à-dire avant la prochaine instruction. Appelable depuis l'interface
+  /// pendant que le programme tourne.
+  void demanderArret() => _arretDemande = true;
+
+  /// Exécuté avant chaque instruction. Remplit deux rôles indissociables :
+  ///
+  /// - interrompre l'exécution si l'utilisateur l'a demandée ;
+  /// - rendre périodiquement la main à la boucle d'événements de Flutter.
+  ///
+  /// Le second point est ce qui rend le premier possible. Les `await` de
+  /// l'interpréteur portent presque toujours sur des valeurs déjà disponibles :
+  /// ils passent par la file des **microtâches**, que Dart vide entièrement
+  /// avant de rendre la main à l'interface. Une boucle infinie gèlerait donc
+  /// l'application, et le clic sur « Arrêter » ne serait jamais traité.
+  /// `Future.delayed(Duration.zero)` passe, lui, par la file des **événements**
+  /// et laisse Flutter redessiner et traiter les clics.
+  Future<void> _pointDeControle() async {
+    if (_arretDemande) throw kStoppedByUserSignal;
+    if (_chrono.elapsedMilliseconds < _msMaxSansRespiration) return;
+    _chrono.reset();
+    await Future<void>.delayed(Duration.zero);
+    // L'utilisateur a pu cliquer sur « Arrêter » pendant cette respiration.
+    if (_arretDemande) throw kStoppedByUserSignal;
+  }
+
   /// Exécute le programme. Les erreurs d'exécution sont **propagées** à
   /// l'appelant (et non avalées ici) : c'est lui qui décide comment les
   /// présenter et qui met le statut d'exécution à jour. C'est aussi ce qui
   /// permet au signal d'arrêt du débogueur pas-à-pas de remonter intact.
   Future<void> interpret(ProgramNode program) async {
+    _arretDemande = false;
+    _chrono
+      ..reset()
+      ..start();
     try {
       for (var decl in program.declarations) { await _execute(decl); }
       await _execute(program.body);
@@ -27,6 +77,7 @@ class Interpreter implements ASTVisitor<dynamic> {
   }
 
   Future<dynamic> _execute(ASTNode node) async {
+    await _pointDeControle();
     if (onStatement != null) {
       bool isInteresting = false;
       String explanation = "";
@@ -313,9 +364,22 @@ class Interpreter implements ASTVisitor<dynamic> {
       case TokenType.PLUS: return (l is String || r is String) ? l.toString() + r.toString() : l + r;
       case TokenType.MOINS: return l - r;
       case TokenType.FOIS: return l * r;
-      case TokenType.DIVISE: return l / r;
-      case TokenType.DIV: return l ~/ r;
-      case TokenType.MOD: return l % r;
+      // Sans ces trois contrôles, Dart renvoie `Infinity` pour `5/0` et lève
+      // une exception en anglais pour `5 mod 0`.
+      case TokenType.DIVISE:
+        if (r == 0) throw "Division par zéro (ligne ${node.operator.line}).";
+        return l / r;
+      case TokenType.DIV:
+        if (r == 0) throw "Division entière par zéro (ligne ${node.operator.line}).";
+        return l ~/ r;
+      case TokenType.MOD:
+        if (r == 0) throw "Modulo par zéro (ligne ${node.operator.line}).";
+        return l % r;
+      case TokenType.PUISSANCE:
+        final puissance = math.pow(l, r);
+        // `pow` renvoie un num : on reste sur un entier quand les deux
+        // opérandes le sont, pour que 2^3 affiche 8 et non 8.0.
+        return (l is int && r is int && r >= 0) ? puissance.toInt() : puissance;
       case TokenType.PLUS_GRAND: return l > r;
       case TokenType.PLUS_GRAND_EGAL: return l >= r;
       case TokenType.PLUS_PETIT: return l < r;

@@ -22,11 +22,11 @@ FIN
 
 - **Éditeur** avec coloration syntaxique, autocomplétion (mots-clés du langage **et** noms que tu déclares), indentation automatique des blocs et retour à la ligne activable.
 - **Diagnostics en direct** : les erreurs de syntaxe sont signalées pendant la frappe, avec le numéro de ligne, sans avoir à lancer le programme.
-- **Exécution** avec console interactive (`Lire` attend une saisie).
+- **Exécution** avec console interactive (`Lire` attend une saisie), interruptible à tout moment : une boucle infinie s'arrête d'un clic sur **Arrêter**.
 - **Débogueur pas à pas** : une instruction à la fois, ligne courante surlignée, explication de ce qui se passe, et panneau des variables mis à jour en direct. Mode automatique disponible.
 - **Traduction en Python**, pour transposer un algorithme connu vers un langage réel.
 - **15 exemples** prêts à charger, du plus simple au tri à bulle.
-- **Ouverture et sauvegarde** de fichiers `.algo`.
+- **Ouverture et sauvegarde** de fichiers `.algo`, et **reprise automatique** : le programme en cours est retrouvé au lancement suivant, même après une fermeture brutale.
 
 ## Installation
 
@@ -122,7 +122,7 @@ FIN
 
 ### Opérateurs
 
-- Arithmétiques : `+` `-` `*` `/` `DIV` (division entière) `MOD` (reste)
+- Arithmétiques : `+` `-` `*` `/` `DIV` (division entière) `MOD` (reste) `^` (puissance, ou `**`)
 - Comparaison : `=` `≠` (ou `<>`, `!=`) `<` `≤` (ou `<=`) `>` `≥` (ou `>=`)
 - Logiques : `ET` `OU` `NON`
 

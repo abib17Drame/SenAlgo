@@ -546,6 +546,7 @@ class PythonTranspiler implements ASTVisitor<String> {
       case TokenType.DIVISE: op = '/'; break;
       case TokenType.DIV: op = '//'; break;
       case TokenType.MOD: op = '%'; break;
+      case TokenType.PUISSANCE: op = '**'; break;
       case TokenType.EGAL: op = '=='; break;
       case TokenType.DIFFERENT: op = '!='; break;
       case TokenType.PLUS_PETIT: op = '<'; break;

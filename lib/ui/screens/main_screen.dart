@@ -18,6 +18,7 @@ import '../widgets/variables_panel.dart';
 import '../widgets/app_toolbar.dart';
 import '../dialogs/python_translation_dialog.dart';
 import '../services/algo_file_service.dart';
+import '../services/auto_save_service.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -52,11 +53,16 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     'afficher', 'saisir', 'ecrire', 'ecrireln', 'lire', 'entier', 'réel', 'booléen', 'chaîne', 'abs', 'racine'
   ];
 
+  /// Programme affiché au démarrage, avant toute reprise ou saisie. Sert de
+  /// témoin pour savoir si l'utilisateur a déjà touché à l'éditeur.
+  late final String _programmeInitial;
+
   @override
   void initState() {
     super.initState();
+    _programmeInitial = ref.read(sourceCodeProvider);
     _codeController = CodeController(
-      text: ref.read(sourceCodeProvider),
+      text: _programmeInitial,
       language: Mode(
         case_insensitive: true,
         refs: {},
@@ -67,7 +73,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           Mode(className: 'comment', begin: '//', end: '\$'),
           Mode(className: 'comment', begin: '{', end: '}'),
           Mode(className: 'number', begin: '\\b\\d+(\\.\\d+)?\\b'),
-          Mode(className: 'operator', begin: '<-|:=|=|<|>|≠|\\+|-|\\*|/|\\.\\.'),
+          Mode(className: 'operator', begin: '<-|:=|=|<|>|≠|\\+|-|\\*|\\^|/|\\.\\.'),
         ],
       ),
       modifiers: [
@@ -128,6 +134,19 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       _scheduleDiagnostics();
     });
     _scheduleDiagnostics();
+    _reprendreProgramme();
+  }
+
+  /// Recharge le programme de la session précédente, s'il y en a un.
+  ///
+  /// La lecture du stockage est asynchrone : l'utilisateur peut donc avoir
+  /// commencé à taper entre-temps. Dans ce cas son texte prime, on n'écrase
+  /// rien — d'où la comparaison avec le programme affiché au démarrage.
+  Future<void> _reprendreProgramme() async {
+    final source = await AutoSaveService.reprendre();
+    if (source == null || !mounted) return;
+    if (_codeController.text != _programmeInitial) return;
+    _codeController.text = source;
   }
 
   /// Analyse (approximative, par expressions régulières) le texte du
@@ -209,6 +228,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     // ré-extraire les symboles à chaque frappe.
     _refreshAutocompleteWords();
     ref.read(diagnosticsProvider.notifier).analyser(_codeController.text);
+    // Même logique pour la sauvegarde automatique : écrire à chaque touche
+    // serait inutile, 400 ms après la dernière frappe suffit largement.
+    AutoSaveService.enregistrer(_codeController.text);
   }
 
   /// Place le curseur au début de la ligne signalée par les diagnostics,
@@ -285,8 +307,12 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             onShowPython: _showPythonTranslation,
             onStop: () {
               setState(() => _autoPlayEnabled = false);
+              // Débloque le pas-à-pas ou l'attente de saisie...
               ref.read(stepCompleterProvider)?.completeError(kStoppedByUserSignal);
               ref.read(inputCompleterProvider)?.completeError(kStoppedByUserSignal);
+              // ...et prévient l'interpréteur, seul moyen d'arrêter une
+              // exécution normale, qui ne s'interrompt sur rien.
+              ref.read(runningInterpreterProvider)?.demanderArret();
             },
             onStep: () {
               setState(() => _autoPlayEnabled = false);

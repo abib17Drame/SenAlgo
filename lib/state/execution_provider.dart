@@ -5,9 +5,9 @@ import '../core/parser/parser.dart';
 import '../core/analyzer/semantic_analyzer.dart';
 import '../core/interpreter/interpreter.dart';
 
-/// Signal utilisé pour arrêter proprement une exécution en mode pas-à-pas
-/// (bouton "Arrêter"), distinct d'une vraie erreur d'exécution.
-const String kStoppedByUserSignal = "__SENALGO_STOPPED_BY_USER__";
+// Le signal d'arrêt est défini par l'interpréteur, qui est seul à le lever.
+// Il est ré-exporté ici pour que l'interface n'ait pas à importer le cœur.
+export '../core/interpreter/interpreter.dart' show kStoppedByUserSignal;
 
 class ConsoleState {
   final List<String> lines;
@@ -102,6 +102,20 @@ class StepCompleterNotifier extends Notifier<Completer<void>?> {
 
 final stepCompleterProvider = NotifierProvider<StepCompleterNotifier, Completer<void>?>(StepCompleterNotifier.new);
 
+/// L'interpréteur de l'exécution en cours, `null` s'il n'y en a pas.
+///
+/// Exposé pour que le bouton « Arrêter » puisse l'interrompre. En pas-à-pas et
+/// en attente de saisie il suffisait de débloquer le `Completer` correspondant ;
+/// une exécution normale, elle, ne s'arrête sur rien, et c'est l'interpréteur
+/// lui-même qu'il faut prévenir.
+class RunningInterpreterNotifier extends Notifier<Interpreter?> {
+  @override
+  Interpreter? build() => null;
+  void setInterpreter(Interpreter? interpreter) => state = interpreter;
+}
+
+final runningInterpreterProvider = NotifierProvider<RunningInterpreterNotifier, Interpreter?>(RunningInterpreterNotifier.new);
+
 class Runner {
   final WidgetRef ref;
   Runner(this.ref);
@@ -149,12 +163,13 @@ class Runner {
           }
         },
       );
+      ref.read(runningInterpreterProvider.notifier).setInterpreter(interpreter);
       await interpreter.interpret(program);
       ref.read(executionProvider.notifier).setStatus(ExecutionStatus.finished, line: null);
     } catch (e) {
       if (e.toString().contains(kStoppedByUserSignal)) {
         ref.read(executionProvider.notifier).setStatus(ExecutionStatus.stopped, line: null);
-        ref.read(consoleProvider.notifier).addLine("\n⏹ Débogage arrêté par l'utilisateur.");
+        ref.read(consoleProvider.notifier).addLine("\n⏹ Exécution arrêtée par l'utilisateur.");
         ref.read(stepCompleterProvider.notifier).setCompleter(null);
         return;
       }
@@ -162,6 +177,10 @@ class Runner {
       ref.read(consoleProvider.notifier).addLine("\n❌ Erreur d'exécution : $e\n");
       ref.read(inputCompleterProvider.notifier).setCompleter(null);
       ref.read(stepCompleterProvider.notifier).setCompleter(null);
+    } finally {
+      // Sans ça, le bouton « Arrêter » d'une exécution suivante interromprait
+      // un interpréteur déjà terminé.
+      ref.read(runningInterpreterProvider.notifier).setInterpreter(null);
     }
   }
 }

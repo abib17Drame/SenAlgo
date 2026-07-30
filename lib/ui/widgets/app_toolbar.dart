@@ -32,7 +32,7 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onClearCode;
   final VoidCallback onShowPython;
 
-  /// Arrête une exécution pas à pas en cours.
+  /// Arrête l'exécution en cours, pas à pas ou normale.
   final VoidCallback onStop;
 
   /// Passe à l'instruction suivante en mode pas à pas.
@@ -104,7 +104,11 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
             onPressed: onShowPython,
           ),
           const SizedBox(width: 8),
-          if (executionState.status == ExecutionStatus.stepping || executionState.status == ExecutionStatus.waitingForInput) ...[
+          // « Arrêter » s'affiche dès qu'un programme tourne, quel que soit le
+          // mode : c'est la seule façon d'interrompre une boucle infinie.
+          if (executionState.status == ExecutionStatus.running ||
+              executionState.status == ExecutionStatus.stepping ||
+              executionState.status == ExecutionStatus.waitingForInput) ...[
             Center(
               child: SizedBox(
                 height: 36,
@@ -123,6 +127,12 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
             const SizedBox(width: 8),
+          ],
+          // « Suivant » et « Auto » ne pilotent que le pas-à-pas : pendant une
+          // exécution normale il n'y a aucun `Completer` à débloquer, ils
+          // seraient actifs à l'écran mais sans effet.
+          if (executionState.status == ExecutionStatus.stepping ||
+              executionState.status == ExecutionStatus.waitingForInput) ...[
             Center(
               child: SizedBox(
                 height: 36,

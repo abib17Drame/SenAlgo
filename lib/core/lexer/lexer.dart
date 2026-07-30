@@ -43,7 +43,12 @@ class Lexer {
       case ',': _addSimpleToken(TokenType.VIRGULE); break;
       case ';': _addSimpleToken(TokenType.POINT_VIRGULE); break;
       case '+': _addSimpleToken(TokenType.PLUS); break;
-      case '*': _addSimpleToken(TokenType.FOIS); break;
+      case '^': _addSimpleToken(TokenType.PUISSANCE); break;
+      // Les deux notations de la puissance cohabitent selon les cours : '^'
+      // et '**'. Une seule étoile reste la multiplication.
+      case '*':
+        if (_match('*')) { _addSimpleToken(TokenType.PUISSANCE); } else { _addSimpleToken(TokenType.FOIS); }
+        break;
       case '=': _addSimpleToken(TokenType.EGAL); break;
       case '←': _addSimpleToken(TokenType.AFFECTATION); break;
       case '≠': _addSimpleToken(TokenType.DIFFERENT); break;
