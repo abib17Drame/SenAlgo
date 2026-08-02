@@ -398,7 +398,11 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     final debut = node.startValue.accept(this);
     final fin = node.endValue.accept(this);
     final pas = node.step?.accept(this);
-    for (final t in [debut, fin, if (pas != null) pas]) {
+    final List<TypeSenAlgo> temps = [debut, fin];
+    if (pas != null) {
+      temps.add(pas);
+    }
+    for (final t in temps) {
       if (t.estConnu && t.base != TypeBase.entier) {
         _erreur("les bornes d'un POUR doivent être des entiers, pas ${_article(t)}.", node.anchor);
         break;
