@@ -5,11 +5,11 @@ import 'package:senalgo/core/parser/parser.dart';
 import 'package:senalgo/ui/examples/example_programs.dart';
 import 'package:test/test.dart';
 
-List<SemanticWarning> _analyser(String source) =>
+List<SemanticDiagnostic> _analyser(String source) =>
     SemanticAnalyzer().analyser(Parser(Lexer(source).scanTokens()).parse());
 
 /// Enveloppe [corps] dans un programme déclarant les variables usuelles.
-List<SemanticWarning> _avecVariables(String corps) => _analyser('''
+List<SemanticDiagnostic> _avecVariables(String corps) => _analyser('''
 ALGORITHME T
 VARIABLES
   n, m : entier

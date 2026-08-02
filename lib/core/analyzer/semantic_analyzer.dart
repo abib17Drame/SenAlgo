@@ -2,17 +2,41 @@ import '../ast/ast.dart';
 import '../lexer/token.dart';
 import 'types.dart';
 
+/// Gravité d'un signalement de l'analyse sémantique.
+enum Severite {
+  /// Le programme ne peut pas s'exécuter correctement : affecter une chaîne à
+  /// un entier, tester une condition qui n'est pas booléenne, indicer un
+  /// tableau avec un réel. L'exécution est refusée.
+  erreur,
+
+  /// Le programme tourne, mais fait probablement autre chose que ce qui était
+  /// voulu : affecter un réel à un entier tronque la valeur, comparer une
+  /// chaîne à un entier donne toujours faux. L'utilisateur décide.
+  avertissement,
+}
+
 /// Signalement produit par l'analyse sémantique.
 ///
-/// Ce sont des AVERTISSEMENTS : ils n'empêchent jamais l'exécution. L'analyse
-/// n'a pas vocation à se substituer au jugement de l'utilisateur, seulement à
-/// attirer son attention sur ce qui est très probablement une erreur.
-class SemanticWarning {
+/// La distinction entre [Severite.erreur] et [Severite.avertissement] est le
+/// cœur du dispositif : une erreur empêche l'exécution, un avertissement la
+/// laisse passer. Le partage se fait sur un critère simple : l'analyse
+/// bloque-t-elle sur quelque chose dont elle est certaine ? Dès qu'un
+/// programme défendable pourrait déclencher le signalement, il reste un
+/// avertissement.
+class SemanticDiagnostic {
   final String message;
   final int line;
   final int column;
+  final Severite severite;
 
-  const SemanticWarning({required this.message, required this.line, this.column = 0});
+  const SemanticDiagnostic({
+    required this.message,
+    required this.line,
+    this.column = 0,
+    this.severite = Severite.erreur,
+  });
+
+  bool get estErreur => severite == Severite.erreur;
 
   @override
   String toString() => 'Ligne $line : $message';
@@ -21,6 +45,11 @@ class SemanticWarning {
 /// Portée lexicale : le programme principal, ou le corps d'un sous-programme.
 class _Portee {
   final Map<String, TypeSenAlgo> variables = {};
+
+  /// Noms déclarés dans un bloc CONSTANTES : ils ne peuvent plus recevoir
+  /// d'affectation.
+  final Set<String> constantes = {};
+
   final _Portee? parent;
 
   _Portee({this.parent});
@@ -28,6 +57,14 @@ class _Portee {
   TypeSenAlgo? chercher(String nom) => variables[nom] ?? parent?.chercher(nom);
   bool contient(String nom) => chercher(nom) != null;
   void declarer(String nom, TypeSenAlgo type) => variables[nom] = type;
+
+  void declarerConstante(String nom, TypeSenAlgo type) {
+    variables[nom] = type;
+    constantes.add(nom);
+  }
+
+  bool estConstante(String nom) =>
+      constantes.contains(nom) || (parent?.estConstante(nom) ?? false);
 }
 
 /// Signature d'une fonction ou d'une procédure.
@@ -46,9 +83,10 @@ class _Signature {
 /// Principe directeur : **ne jamais signaler ce dont on n'est pas sûr**. Dès
 /// qu'un type est indéterminé, l'analyse se tait. Un faux avertissement coûte
 /// plus cher qu'un oubli, puisqu'il envoie l'utilisateur chercher un problème
-/// inexistant.
+/// inexistant, et depuis que les erreurs bloquent l'exécution, il coûte même
+/// bien davantage.
 class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
-  final List<SemanticWarning> warnings = [];
+  final List<SemanticDiagnostic> diagnostics = [];
   final Map<String, _Signature> _signatures = {};
 
   _Portee _portee = _Portee();
@@ -62,10 +100,10 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
   static const _entreesSorties = {'ecrire', 'écrire', 'afficher', 'ecrireln', 'écrireln', 'afficherln'};
   static const _lectures = {'lire', 'saisir'};
 
-  /// Analyse [programme] et renvoie les avertissements, du premier au dernier
-  /// dans l'ordre du texte.
-  List<SemanticWarning> analyser(ProgramNode programme) {
-    warnings.clear();
+  /// Analyse [programme] et renvoie les signalements, du premier au dernier
+  /// dans l'ordre du texte, erreurs et avertissements mêlés.
+  List<SemanticDiagnostic> analyser(ProgramNode programme) {
+    diagnostics.clear();
     _signatures.clear();
     _portee = _Portee();
 
@@ -92,15 +130,24 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     }
     programme.body.accept(this);
 
-    warnings.sort((a, b) => a.line.compareTo(b.line));
-    return List.unmodifiable(warnings);
+    diagnostics.sort((a, b) => a.line.compareTo(b.line));
+    return List.unmodifiable(diagnostics);
   }
 
-  void _signaler(String message, Token? ancre) {
-    warnings.add(SemanticWarning(
+  /// Signale un fait certain, qui empêchera le programme de démarrer.
+  void _erreur(String message, Token? ancre) =>
+      _signaler(message, ancre, Severite.erreur);
+
+  /// Signale un doute : le programme démarrera quand même.
+  void _avertir(String message, Token? ancre) =>
+      _signaler(message, ancre, Severite.avertissement);
+
+  void _signaler(String message, Token? ancre, Severite severite) {
+    diagnostics.add(SemanticDiagnostic(
       message: message,
       line: ancre?.line ?? 0,
       column: ancre?.column ?? 0,
+      severite: severite,
     ));
   }
 
@@ -120,7 +167,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
 
   @override
   TypeSenAlgo visitConstDeclaration(ConstDeclarationNode node) {
-    _portee.declarer(node.identifier, node.value.accept(this));
+    _portee.declarerConstante(node.identifier, node.value.accept(this));
     return TypeSenAlgo.vide;
   }
 
@@ -130,7 +177,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     final borneSup = node.upperBound.accept(this);
     for (final borne in [borneInf, borneSup]) {
       if (borne.estConnu && borne.base != TypeBase.entier) {
-        _signaler(
+        _erreur(
           "les bornes d'un tableau doivent être des entiers, pas ${_article(borne)}.",
           node.anchor,
         );
@@ -207,20 +254,58 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     final valeur = node.value.accept(this);
     final cible = _portee.chercher(node.identifier);
     if (cible == null) {
-      _signaler("la variable '${node.identifier}' n'est pas déclarée.", node.anchor);
+      _erreur("la variable '${node.identifier}' n'est pas déclarée.", node.anchor);
+      return TypeSenAlgo.vide;
+    }
+    if (_portee.estConstante(node.identifier)) {
+      _erreur(
+        "'${node.identifier}' est une constante : sa valeur est fixée à la "
+        "déclaration et ne peut plus changer.",
+        node.anchor,
+      );
       return TypeSenAlgo.vide;
     }
     if (!cible.accepte(valeur)) {
-      _signaler(_messageAffectation(node.identifier, cible, valeur), node.anchor);
+      _signalerAffectation(node.identifier, cible, valeur, node.anchor);
     }
     return TypeSenAlgo.vide;
   }
 
-  String _messageAffectation(String nom, TypeSenAlgo cible, TypeSenAlgo valeur) {
+  /// Un mélange de types est-il seulement douteux, ou franchement faux ?
+  ///
+  /// Deux rétrécissements ont un sens défini, et l'exécution les réalise pour
+  /// de bon : un réel rangé dans un entier perd sa partie décimale, une chaîne
+  /// rangée dans un caractère tient si elle est assez courte. Ceux-là
+  /// avertissent. Tout le reste bloque.
+  ///
+  /// Une seule fonction pour toutes les situations où une valeur entre dans
+  /// une case typée, faute de quoi la même faute serait tantôt un
+  /// avertissement dans une affectation, tantôt une erreur dans un appel.
+  Severite _severitePour(TypeSenAlgo cible, TypeSenAlgo valeur) {
     if (cible.base == TypeBase.entier && valeur.base == TypeBase.reel) {
-      return "'$nom' est un entier : lui affecter un réel perdrait la partie décimale.";
+      return Severite.avertissement;
     }
-    return "'$nom' est ${_article(cible)}, mais la valeur affectée est ${_article(valeur)}.";
+    if (cible.base == TypeBase.caractere && valeur.base == TypeBase.chaine) {
+      return Severite.avertissement;
+    }
+    return Severite.erreur;
+  }
+
+  /// Signale une affectation dont les types ne concordent pas.
+  void _signalerAffectation(String nom, TypeSenAlgo cible, TypeSenAlgo valeur, Token? ancre) {
+    if (cible.base == TypeBase.entier && valeur.base == TypeBase.reel) {
+      _avertir("'$nom' est un entier : lui affecter un réel perdrait la partie décimale.", ancre);
+      return;
+    }
+    if (cible.base == TypeBase.caractere && valeur.base == TypeBase.chaine) {
+      _avertir(
+        "'$nom' est un caractère : un texte entre guillemets doubles est une "
+        "chaîne. Écrivez-le entre apostrophes, et sur une seule lettre.",
+        ancre,
+      );
+      return;
+    }
+    _erreur("'$nom' est ${_article(cible)}, mais la valeur affectée est ${_article(valeur)}.", ancre);
   }
 
   String _article(TypeSenAlgo t) {
@@ -248,11 +333,11 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     _verifierIndice(node.index.accept(this), node.anchor);
     final tableau = _portee.chercher(node.identifier);
     if (tableau == null) {
-      _signaler("le tableau '${node.identifier}' n'est pas déclaré.", node.anchor);
+      _erreur("le tableau '${node.identifier}' n'est pas déclaré.", node.anchor);
       return TypeSenAlgo.vide;
     }
     if (tableau.estConnu && !tableau.estTableau) {
-      _signaler("'${node.identifier}' n'est pas un tableau : ${_article(tableau)}.", node.anchor);
+      _erreur("'${node.identifier}' n'est pas un tableau : ${_article(tableau)}.", node.anchor);
       return TypeSenAlgo.vide;
     }
     final attendu = TypeSenAlgo(tableau.element);
@@ -261,6 +346,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
         "le tableau '${node.identifier}' contient ${_article(attendu)}, "
         "mais la valeur affectée est ${_article(valeur)}.",
         node.anchor,
+        _severitePour(attendu, valeur),
       );
     }
     return TypeSenAlgo.vide;
@@ -268,13 +354,13 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
 
   void _verifierIndice(TypeSenAlgo type, Token? ancre) {
     if (type.estConnu && type.base != TypeBase.entier) {
-      _signaler("un indice de tableau doit être un entier, pas ${_article(type)}.", ancre);
+      _erreur("un indice de tableau doit être un entier, pas ${_article(type)}.", ancre);
     }
   }
 
   void _verifierCondition(TypeSenAlgo type, String contexte, Token? ancre) {
     if (type.estConnu && type.base != TypeBase.booleen) {
-      _signaler(
+      _erreur(
         "la condition $contexte doit être vraie ou fausse, or elle vaut ${_article(type)}.",
         ancre,
       );
@@ -314,7 +400,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     final pas = node.step?.accept(this);
     for (final t in [debut, fin, if (pas != null) pas]) {
       if (t.estConnu && t.base != TypeBase.entier) {
-        _signaler("les bornes d'un POUR doivent être des entiers, pas ${_article(t)}.", node.anchor);
+        _erreur("les bornes d'un POUR doivent être des entiers, pas ${_article(t)}.", node.anchor);
         break;
       }
     }
@@ -343,16 +429,17 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     final attendu = _retourAttendu;
     if (attendu == null) {
       if (node.value != null) {
-        _signaler("une procédure ne renvoie pas de valeur : 'Retourner' doit être employé seul.", node.anchor);
+        _erreur("une procédure ne renvoie pas de valeur : 'Retourner' doit être employé seul.", node.anchor);
       }
       return TypeSenAlgo.vide;
     }
     if (node.value == null) {
-      _signaler("cette fonction doit renvoyer ${_article(attendu)}.", node.anchor);
+      _erreur("cette fonction doit renvoyer ${_article(attendu)}.", node.anchor);
     } else if (!attendu.accepte(valeur)) {
       _signaler(
         "cette fonction déclare renvoyer ${_article(attendu)}, mais la valeur renvoyée est ${_article(valeur)}.",
         node.anchor,
+        _severitePour(attendu, valeur),
       );
     }
     return TypeSenAlgo.vide;
@@ -366,7 +453,9 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     if (v is int) return TypeSenAlgo.entier;
     if (v is double) return TypeSenAlgo.reel;
     if (v is bool) return TypeSenAlgo.booleen;
-    if (v is String) return TypeSenAlgo.chaine;
+    // Ce sont les guillemets qui décident, pas la longueur : 'o' est un
+    // caractère, "o" est une chaîne d'une lettre. Rien n'est deviné.
+    if (v is String) return node.estCaractere ? TypeSenAlgo.caractere : TypeSenAlgo.chaine;
     return TypeSenAlgo.inconnu;
   }
 
@@ -375,7 +464,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     final nom = node.name.lexeme;
     final type = _portee.chercher(nom);
     if (type == null) {
-      _signaler("la variable '$nom' n'est pas déclarée.", node.name);
+      _erreur("la variable '$nom' n'est pas déclarée.", node.name);
       return TypeSenAlgo.inconnu;
     }
     return type;
@@ -387,11 +476,11 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     final nom = node.name.lexeme;
     final type = _portee.chercher(nom);
     if (type == null) {
-      _signaler("la variable '$nom' n'est pas déclarée.", node.name);
+      _erreur("la variable '$nom' n'est pas déclarée.", node.name);
       return TypeSenAlgo.inconnu;
     }
     if (type.estConnu && !type.estTableau) {
-      _signaler("'$nom' n'est pas un tableau : ${_article(type)}.", node.name);
+      _erreur("'$nom' n'est pas un tableau : ${_article(type)}.", node.name);
       return TypeSenAlgo.inconnu;
     }
     return TypeSenAlgo(type.element);
@@ -402,12 +491,12 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     final droite = node.right.accept(this);
     if (node.operator.type == TokenType.NON) {
       if (droite.estConnu && droite.base != TypeBase.booleen) {
-        _signaler("'NON' s'applique à une valeur vraie ou fausse, pas à ${_article(droite)}.", node.operator);
+        _erreur("'NON' s'applique à une valeur vraie ou fausse, pas à ${_article(droite)}.", node.operator);
       }
       return TypeSenAlgo.booleen;
     }
     if (droite.estConnu && !droite.estNumerique) {
-      _signaler("le signe '-' s'applique à un nombre, pas à ${_article(droite)}.", node.operator);
+      _erreur("le signe '-' s'applique à un nombre, pas à ${_article(droite)}.", node.operator);
       return TypeSenAlgo.inconnu;
     }
     return droite;
@@ -424,7 +513,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       case TokenType.OU:
         for (final t in [g, d]) {
           if (t.estConnu && t.base != TypeBase.booleen) {
-            _signaler(
+            _erreur(
               "'${op.lexeme}' relie deux conditions vraies ou fausses, or l'une vaut ${_article(t)}.",
               op,
             );
@@ -435,8 +524,11 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
 
       case TokenType.EGAL:
       case TokenType.DIFFERENT:
+        // Comparer deux types étrangers a un résultat parfaitement défini :
+        // c'est toujours faux. Le programme tourne, il ne fait simplement pas
+        // ce qu'on croit : un avertissement, pas une erreur.
         if (g.estConnu && d.estConnu && !g.accepte(d) && !d.accepte(g)) {
-          _signaler("on compare ${_article(g)} avec ${_article(d)} : la comparaison est toujours fausse.", op);
+          _avertir("on compare ${_article(g)} avec ${_article(d)} : la comparaison est toujours fausse.", op);
         }
         return TypeSenAlgo.booleen;
 
@@ -445,13 +537,16 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       case TokenType.PLUS_GRAND:
       case TokenType.PLUS_GRAND_EGAL:
         if (g.estConnu && d.estConnu && !(g.estNumerique && d.estNumerique) && g.base != d.base) {
-          _signaler("on ne peut pas comparer ${_article(g)} et ${_article(d)}.", op);
+          _erreur("on ne peut pas comparer ${_article(g)} et ${_article(d)}.", op);
         }
         return TypeSenAlgo.booleen;
 
       case TokenType.PLUS:
-        // Le '+' concatène dès qu'une des deux valeurs est une chaîne.
-        if (g.base == TypeBase.chaine || d.base == TypeBase.chaine) return TypeSenAlgo.chaine;
+        // Le '+' concatène dès qu'une des deux valeurs est textuelle. Les
+        // caractères en font partie : `c1 + c2` forme un mot de deux lettres,
+        // ce que l'interpréteur fait déjà.
+        const textuels = {TypeBase.chaine, TypeBase.caractere};
+        if (textuels.contains(g.base) || textuels.contains(d.base)) return TypeSenAlgo.chaine;
         return _resultatArithmetique(g, d, op);
 
       case TokenType.MOINS:
@@ -469,7 +564,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       case TokenType.MOD:
         for (final t in [g, d]) {
           if (t.estConnu && t.base != TypeBase.entier) {
-            _signaler("'${op.lexeme}' s'applique à des entiers, pas à ${_article(t)}.", op);
+            _erreur("'${op.lexeme}' s'applique à des entiers, pas à ${_article(t)}.", op);
             break;
           }
         }
@@ -483,7 +578,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
   void _verifierNumerique(TypeSenAlgo g, TypeSenAlgo d, Token op) {
     for (final t in [g, d]) {
       if (t.estConnu && !t.estNumerique) {
-        _signaler("'${op.lexeme}' s'applique à des nombres, pas à ${_article(t)}.", op);
+        _erreur("'${op.lexeme}' s'applique à des nombres, pas à ${_article(t)}.", op);
         return;
       }
     }
@@ -511,9 +606,20 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
 
     if (_lectures.contains(nomMinuscule)) {
       // La valeur saisie est convertie selon la variable qui la reçoit : on ne
-      // peut pas lui attribuer de type a priori.
+      // peut pas lui attribuer de type a priori. En revanche la cible, elle,
+      // doit pouvoir recevoir quelque chose.
       for (final a in node.arguments) {
-        a.accept(this);
+        final type = a.accept(this);
+        if (a is! VariableNode) continue;
+        final cible = a.name.lexeme;
+        if (_portee.estConstante(cible)) {
+          _erreur("'$cible' est une constante : elle ne peut pas être saisie au clavier.", node.anchor);
+        } else if (type.estTableau) {
+          _erreur(
+            "'$cible' est un tableau : indiquez la case à remplir, par exemple $cible[1].",
+            node.anchor,
+          );
+        }
       }
       return TypeSenAlgo.inconnu;
     }
@@ -521,7 +627,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     if (nomMinuscule == 'abs') {
       final t = node.arguments.isEmpty ? TypeSenAlgo.inconnu : node.arguments.first.accept(this);
       if (t.estConnu && !t.estNumerique) {
-        _signaler("'abs' s'applique à un nombre, pas à ${_article(t)}.", node.anchor);
+        _erreur("'abs' s'applique à un nombre, pas à ${_article(t)}.", node.anchor);
       }
       return t.estNumerique ? t : TypeSenAlgo.inconnu;
     }
@@ -529,7 +635,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     if (nomMinuscule == 'racine' || nomMinuscule == 'sqrt') {
       final t = node.arguments.isEmpty ? TypeSenAlgo.inconnu : node.arguments.first.accept(this);
       if (t.estConnu && !t.estNumerique) {
-        _signaler("'$nom' s'applique à un nombre, pas à ${_article(t)}.", node.anchor);
+        _erreur("'$nom' s'applique à un nombre, pas à ${_article(t)}.", node.anchor);
       }
       return TypeSenAlgo.reel;
     }
@@ -540,7 +646,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       if (node.arguments.length == 1) {
         _verifierIndice(node.arguments.first.accept(this), node.anchor);
       } else {
-        _signaler("l'accès au tableau '$nom' demande exactement un indice.", node.anchor);
+        _erreur("l'accès au tableau '$nom' demande exactement un indice.", node.anchor);
       }
       return TypeSenAlgo(variable.element);
     }
@@ -550,12 +656,12 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       for (final a in node.arguments) {
         a.accept(this);
       }
-      _signaler("'$nom' n'est ni une fonction, ni une procédure, ni un tableau connu.", node.anchor);
+      _erreur("'$nom' n'est ni une fonction, ni une procédure, ni un tableau connu.", node.anchor);
       return TypeSenAlgo.inconnu;
     }
 
     if (node.arguments.length != signature.parametres.length) {
-      _signaler(
+      _erreur(
         "'$nom' attend ${signature.parametres.length} argument(s), "
         "mais ${node.arguments.length} lui sont fournis.",
         node.anchor,
@@ -574,13 +680,14 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
           "le paramètre '${p.name}' de '$nom' attend ${_article(attendu)}, "
           "mais l'argument fourni est ${_article(typeArg)}.",
           node.anchor,
+          _severitePour(attendu, typeArg),
         );
       }
       // Un paramètre de sortie doit recevoir quelque chose où écrire.
       if (p.mode != ParamMode.donnee) {
         final arg = node.arguments[i];
         if (arg is! VariableNode && arg is! ArrayAccessNode) {
-          _signaler(
+          _erreur(
             "le paramètre '${p.name}' de '$nom' est un paramètre de sortie : "
             "il doit recevoir une variable, pas une expression.",
             node.anchor,

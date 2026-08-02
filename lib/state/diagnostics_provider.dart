@@ -6,7 +6,7 @@ import '../core/parser/parser.dart';
 
 /// Résultat de l'analyse du programme en cours d'édition.
 ///
-/// Une erreur de syntaxe et des avertissements sémantiques sont mutuellement
+/// Une erreur de syntaxe et les signalements sémantiques sont mutuellement
 /// exclusifs : tant que la syntaxe est fautive, l'arbre est incomplet et
 /// l'analyse sémantique n'aurait aucun sens.
 class Diagnostics {
@@ -16,15 +16,26 @@ class Diagnostics {
   /// Ligne de l'erreur, lorsqu'elle a pu être extraite du message.
   final int? errorLine;
 
-  /// Avertissements sémantiques. N'empêchent jamais l'exécution.
-  final List<SemanticWarning> warnings;
+  /// Signalements sémantiques, erreurs et avertissements mêlés, dans l'ordre
+  /// des lignes.
+  final List<SemanticDiagnostic> warnings;
 
   const Diagnostics({this.error, this.errorLine, this.warnings = const []});
 
   static const vide = Diagnostics();
 
-  bool get aUneErreur => error != null;
-  bool get aDesAvertissements => error == null && warnings.isNotEmpty;
+  /// Signalements bloquants : le programme ne démarrera pas tant qu'il en
+  /// reste un.
+  List<SemanticDiagnostic> get erreurs => warnings.where((d) => d.estErreur).toList();
+
+  /// Signalements informatifs : le programme démarre quand même.
+  List<SemanticDiagnostic> get avertissements => warnings.where((d) => !d.estErreur).toList();
+
+  /// Vrai si le programme ne peut pas tourner : syntaxe fautive, ou erreur
+  /// sémantique.
+  bool get aUneErreur => error != null || erreurs.isNotEmpty;
+
+  bool get aDesAvertissements => !aUneErreur && warnings.isNotEmpty;
 
   /// Ligne vers laquelle amener le curseur au clic sur le badge.
   int? get ligneAAtteindre => errorLine ?? (warnings.isNotEmpty ? warnings.first.line : null);

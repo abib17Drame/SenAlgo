@@ -63,8 +63,8 @@ class EditorPanel extends StatelessWidget {
                     color: wrapLines ? SenAlgoTheme.neonCyan : Colors.grey,
                   ),
                   tooltip: wrapLines
-                      ? 'Retour à la ligne activé — cliquer pour défiler horizontalement'
-                      : 'Défilement horizontal — cliquer pour revenir à la ligne',
+                      ? 'Retour à la ligne activé, cliquer pour défiler horizontalement'
+                      : 'Défilement horizontal, cliquer pour revenir à la ligne',
                   visualDensity: VisualDensity.compact,
                   constraints: const BoxConstraints(),
                   padding: const EdgeInsets.symmetric(horizontal: 8),

@@ -198,7 +198,15 @@ class Lexer {
     }
   }
 
+  /// Lit un texte entre guillemets.
+  ///
+  /// Les deux délimiteurs n'ont pas le même sens, comme dans le cours : les
+  /// apostrophes encadrent un caractère et un seul (`rep <- 'o'`), les
+  /// guillemets doubles encadrent une chaîne de longueur quelconque
+  /// (`nom <- "moussa"`). Distinguer les deux à la lecture évite de deviner
+  /// ensuite, à partir de la longueur, ce que l'auteur voulait écrire.
   void _string(String quote) {
+    final estCaractere = quote == "'";
     StringBuffer buffer = StringBuffer();
     while (_peek() != quote && !_isAtEnd()) {
       if (_peek() == '\n') {
@@ -224,9 +232,31 @@ class Lexer {
       }
     }
     
-    if (_isAtEnd()) { _addToken(TokenType.ERREUR, 'Chaîne non terminée'); return; }
+    if (_isAtEnd()) {
+      _addToken(TokenType.ERREUR, estCaractere ? 'Caractère non terminé' : 'Chaîne non terminée');
+      return;
+    }
     _advance(); // The closing quote
-    _addToken(TokenType.CHAINE, buffer.toString());
+
+    final texte = buffer.toString();
+    if (!estCaractere) {
+      _addToken(TokenType.CHAINE, texte);
+      return;
+    }
+    // La longueur est mesurée après traitement des échappements : '\n' compte
+    // bien pour une seule lettre.
+    if (texte.length != 1) {
+      _addToken(
+        TokenType.ERREUR,
+        texte.isEmpty
+            ? "Un caractère ne peut pas être vide : écrivez '?' avec une lettre, "
+                'ou "" pour une chaîne vide'
+            : 'Un caractère ne contient qu\'une seule lettre, or \'$texte\' en a '
+                '${texte.length}. Pour un texte plus long, utilisez les guillemets doubles : "$texte"',
+      );
+      return;
+    }
+    _addToken(TokenType.CARACTERE, texte);
   }
 
   bool _match(String expected) {

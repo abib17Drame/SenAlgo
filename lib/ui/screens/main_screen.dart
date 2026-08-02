@@ -141,7 +141,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   ///
   /// La lecture du stockage est asynchrone : l'utilisateur peut donc avoir
   /// commencé à taper entre-temps. Dans ce cas son texte prime, on n'écrase
-  /// rien — d'où la comparaison avec le programme affiché au démarrage.
+  /// rien, d'où la comparaison avec le programme affiché au démarrage.
   Future<void> _reprendreProgramme() async {
     final source = await AutoSaveService.reprendre();
     if (source == null || !mounted) return;
@@ -228,6 +228,16 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     // ré-extraire les symboles à chaque frappe.
     _refreshAutocompleteWords();
     ref.read(diagnosticsProvider.notifier).analyser(_codeController.text);
+    // La barre du bas rend compte d'un programme qui vient de tourner. Le
+    // texte a changé depuis : son verdict porte sur des lignes qui n'existent
+    // plus sous cette forme, et le numéro qu'il cite désigne autre chose.
+    // On revient donc à l'état neutre, jusqu'au prochain lancement.
+    final statut = ref.read(executionProvider).status;
+    if (statut == ExecutionStatus.error ||
+        statut == ExecutionStatus.finished ||
+        statut == ExecutionStatus.stopped) {
+      ref.read(executionProvider.notifier).setStatus(ExecutionStatus.idle, line: null);
+    }
     // Même logique pour la sauvegarde automatique : écrire à chaque touche
     // serait inutile, 400 ms après la dernière frappe suffit largement.
     AutoSaveService.enregistrer(_codeController.text);

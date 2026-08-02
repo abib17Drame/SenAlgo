@@ -24,12 +24,26 @@ void main() {
     expect(d.ligneAAtteindre, equals(d.errorLine));
   });
 
-  test('un avertissement sémantique est rapporté avec sa ligne', () {
+  test('une erreur sémantique est rapportée avec sa ligne', () {
     final d = _analyser('ALGORITHME T\nVARIABLES n : entier\nDEBUT\n n <- "texte"\nFIN');
+    expect(d.aUneErreur, isTrue);
+    expect(d.erreurs.single.line, equals(4));
+    expect(d.ligneAAtteindre, equals(4));
+
+    // Une erreur sémantique n'est pas une erreur de syntaxe : le programme a
+    // bien été lu, c'est son sens qui cloche.
+    expect(d.error, isNull);
+    expect(d.aDesAvertissements, isFalse);
+  });
+
+  test('un avertissement sémantique laisse le programme exécutable', () {
+    // Affecter un réel à un entier a un sens défini (la partie décimale est
+    // perdue), donc cela ne bloque pas.
+    final d = _analyser('ALGORITHME T\nVARIABLES n : entier\nDEBUT\n n <- 3.7\nFIN');
     expect(d.aUneErreur, isFalse);
     expect(d.aDesAvertissements, isTrue);
-    expect(d.warnings.single.line, equals(4));
-    expect(d.ligneAAtteindre, equals(4));
+    expect(d.erreurs, isEmpty);
+    expect(d.avertissements.single.line, equals(4));
   });
 
   test("une erreur de syntaxe masque les avertissements", () {
@@ -47,7 +61,7 @@ void main() {
     final notifier = container.read(diagnosticsProvider.notifier);
 
     notifier.analyser('ALGORITHME T\nVARIABLES n : entier\nDEBUT\n n <- "texte"\nFIN');
-    expect(container.read(diagnosticsProvider).aDesAvertissements, isTrue);
+    expect(container.read(diagnosticsProvider).aUneErreur, isTrue);
 
     notifier.analyser('ALGORITHME T\nVARIABLES n : entier\nDEBUT\n n <- 5\nFIN');
     expect(container.read(diagnosticsProvider).aDesAvertissements, isFalse);

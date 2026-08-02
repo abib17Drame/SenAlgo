@@ -45,7 +45,7 @@ void main() {
 
     // Un Timer ne peut se déclencher que si la file d'événements est traitée.
     // S'il se déclenche pendant que la boucle tourne, c'est que l'interpréteur
-    // rend bien la main — donc qu'un clic serait traité lui aussi.
+    // rend bien la main, donc qu'un clic serait traité lui aussi.
     var interfaceServie = 0;
     for (var i = 0; i < 5; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 20));

@@ -129,14 +129,32 @@ class Runner {
       final tokens = Lexer(source).scanTokens();
       final program = Parser(tokens).parse();
 
-      // Les avertissements de l'analyse sémantique sont affichés puis
-      // l'exécution se poursuit : ils signalent une erreur probable, mais
-      // c'est à l'utilisateur de juger.
-      final avertissements = SemanticAnalyzer().analyser(program);
-      for (final a in avertissements) {
-        ref.read(consoleProvider.notifier).addLine("⚠ $a\n");
+      // L'analyse sémantique décide si le programme a le droit de démarrer.
+      // Une erreur est un fait établi : affecter une chaîne à un entier,
+      // tester une condition qui n'en est pas une. Le faire tourner quand même
+      // ne produirait qu'un résultat faux, plus difficile à comprendre que le
+      // refus. Un avertissement, lui, s'affiche et laisse passer.
+      final signalements = SemanticAnalyzer().analyser(program);
+      final erreurs = signalements.where((d) => d.estErreur).toList();
+
+      for (final d in signalements) {
+        ref.read(consoleProvider.notifier).addLine("${d.estErreur ? "❌" : "⚠"} $d\n");
       }
-      if (avertissements.isNotEmpty) {
+
+      if (erreurs.isNotEmpty) {
+        final n = erreurs.length;
+        ref.read(consoleProvider.notifier).addLine(
+              "\n⛔ Exécution refusée : $n erreur${n > 1 ? "s" : ""} à corriger.\n",
+            );
+        ref.read(executionProvider.notifier).setStatus(
+              ExecutionStatus.error,
+              error: erreurs.first.message,
+              line: erreurs.first.line,
+            );
+        return;
+      }
+
+      if (signalements.isNotEmpty) {
         ref.read(consoleProvider.notifier).addLine("\n");
       }
 

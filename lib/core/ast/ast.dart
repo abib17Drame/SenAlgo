@@ -163,7 +163,13 @@ class UnaryNode extends ASTNode {
 
 class LiteralNode extends ASTNode {
   final dynamic value;
-  LiteralNode({required this.value});
+
+  /// Vrai si le texte a été écrit entre apostrophes ('a'), ce qui en fait un
+  /// caractère et non une chaîne. La valeur seule ne suffit pas à trancher :
+  /// 'a' et "a" portent le même texte mais pas le même type.
+  final bool estCaractere;
+
+  LiteralNode({required this.value, this.estCaractere = false});
   @override T accept<T>(ASTVisitor<T> visitor) => visitor.visitLiteral(this);
 }
 

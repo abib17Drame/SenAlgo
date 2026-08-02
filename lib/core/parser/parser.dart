@@ -68,8 +68,8 @@ class Parser {
     return decls;
   }
 
-  /// Si le jeton courant est un mot réservé manifestement employé comme nom —
-  /// il est suivi de ':', ',' ou '=' — lève l'erreur explicite.
+  /// Si le jeton courant est un mot réservé manifestement employé comme nom,
+  /// c'est-à-dire suivi de ':', ',' ou '=', lève l'erreur explicite.
   ///
   /// Sans ce contrôle, la boucle de déclaration s'arrête simplement (le mot
   /// n'est pas un identifiant) et `parse()` finit par ignorer la ligne en
@@ -268,7 +268,8 @@ class Parser {
           !_check(TokenType.FINPOUR) && !_check(TokenType.FINTANTQUE)) {
         // Peek to see if there's at least one expression-like token
         if (_check(TokenType.IDENTIFIANT) || _check(TokenType.ENTIER) || 
-            _check(TokenType.REEL) || _check(TokenType.CHAINE) || 
+            _check(TokenType.REEL) || _check(TokenType.CHAINE) ||
+            _check(TokenType.CARACTERE) ||
             _check(TokenType.BOOLEEN) || _check(TokenType.PAREN_OUVRANTE) ||
             _check(TokenType.NON) || _check(TokenType.MOINS)) {
           do {
@@ -533,6 +534,9 @@ class Parser {
     if (_match(TokenType.ENTIER)) return LiteralNode(value: _previous().literal)..anchor = _previous();
     if (_match(TokenType.REEL)) return LiteralNode(value: _previous().literal)..anchor = _previous();
     if (_match(TokenType.CHAINE)) return LiteralNode(value: _previous().literal)..anchor = _previous();
+    if (_match(TokenType.CARACTERE)) {
+      return LiteralNode(value: _previous().literal, estCaractere: true)..anchor = _previous();
+    }
     if (_match(TokenType.IDENTIFIANT) || 
         _match(TokenType.ECRIRE) || _match(TokenType.AFFICHER) || 
         _match(TokenType.LIRE) || _match(TokenType.SAISIR) ||
@@ -548,6 +552,13 @@ class Parser {
       final expr = _dansGroupement(_expression);
       _consume(TokenType.PAREN_FERMANTE, ") attendue.");
       return expr;
+    }
+    // L'analyse lexicale range ce qu'elle n'a pas su lire dans un jeton
+    // ERREUR, dont le libellé explique précisément le problème. Sans ce
+    // relais, ce libellé n'arrive jamais jusqu'à l'utilisateur, remplacé par
+    // un « Expression attendue » qui ne l'aide en rien.
+    if (_check(TokenType.ERREUR)) {
+      throw "${_peek().literal} (ligne ${_peek().line}).";
     }
     throw "Expression attendue ligne ${_peek().line}.";
   }
