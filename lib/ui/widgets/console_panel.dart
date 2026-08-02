@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -45,6 +46,44 @@ class _ConsolePanelState extends ConsumerState<ConsolePanel> {
     completer.complete(valeur);
   }
 
+  void _copierConsole() {
+    final consoleState = ref.watch(consoleProvider);
+    final ligneCount = consoleState.lines.length;
+    final texteACopier = consoleState.lines.join('\n');
+
+    if (texteACopier.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Console vide - rien à copier'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    Clipboard.setData(ClipboardData(text: texteACopier)).then((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$ligneCount lignes copiées'),
+          duration: Duration(seconds: 2),
+          backgroundColor: SenAlgoTheme.neonGreen,
+        ),
+      );
+    }).catchError((error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de la copie : $error'),
+          duration: const Duration(seconds: 2),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final consoleState = ref.watch(consoleProvider);
@@ -65,6 +104,13 @@ class _ConsolePanelState extends ConsumerState<ConsolePanel> {
             onPressed: widget.onToggleVariables,
             tooltip: widget.showVariables ? 'Masquer les variables' : 'Afficher les variables',
           ),
+        IconButton(
+          constraints: const BoxConstraints(),
+          padding: const EdgeInsets.all(4),
+          icon: const Icon(Icons.copy, size: 16),
+          onPressed: _copierConsole,
+          tooltip: 'Copier la console',
+        ),
         IconButton(
           constraints: const BoxConstraints(),
           padding: const EdgeInsets.all(4),
