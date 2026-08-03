@@ -186,6 +186,12 @@ Trois familles de tests méritent d'être signalées :
 - **Absence de faux positifs.** Les 15 exemples doivent produire zéro avertissement sémantique. Un analyseur qui crie au loup sur du code correct est pire qu'une absence d'analyse : il apprend à ignorer les avertissements, et depuis que les erreurs bloquent l'exécution, un seul faux positif empêcherait carrément de travailler.
 - **Le refus d'exécuter est vérifié par son effet.** Le programme fautif du test affiche quelque chose *avant* la ligne en faute : si le blocage cessait de fonctionner, cet affichage apparaîtrait. Un test qui se contenterait de chercher le message « Exécution refusée » passerait encore.
 
+## Contribuer
+
+Les règles du projet (version de Flutter attendue, fichiers générés à ne pas
+committer, conventions de code et de messages) tiennent en une page :
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Limites connues
 
 - **Types personnalisés non implémentés.** `Type`, `Structure` et `Enregistrement` sont reconnus par l'analyseur lexical mais lèvent une erreur explicite plutôt que d'être ignorés en silence.
