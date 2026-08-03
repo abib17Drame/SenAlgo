@@ -31,6 +31,19 @@ class ConsoleState {
   }
   
   ConsoleState clear() => ConsoleState(lines: [""]);
+
+  /// Le contenu de la console d'un seul tenant, tel qu'on le copierait.
+  String get texte => lines.join('\n');
+
+  /// Nombre de lignes réellement affichées.
+  ///
+  /// Le dernier élément de [lines] est la ligne en cours d'écriture : elle
+  /// compte tant que du texte y a été posé, mais dès qu'un `\n` la termine
+  /// elle est vide et n'attend plus que la suite. Comme toute sortie de
+  /// `ecrire` finit par un retour à la ligne, compter `lines.length`
+  /// annoncerait systématiquement une ligne de trop.
+  int get nombreDeLignes =>
+      lines.isEmpty ? 0 : lines.length - (lines.last.isEmpty ? 1 : 0);
 }
 
 class ConsoleNotifier extends Notifier<ConsoleState> {

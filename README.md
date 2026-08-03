@@ -23,7 +23,7 @@ FIN
 - **Éditeur** avec coloration syntaxique, autocomplétion (mots-clés du langage **et** noms que tu déclares), indentation automatique des blocs et retour à la ligne activable.
 - **Diagnostics en direct** : les erreurs de syntaxe sont signalées pendant la frappe, avec le numéro de ligne, sans avoir à lancer le programme.
 - **Vérification des types**, à deux niveaux : ce qui est certainement faux (`n : entier` recevant une chaîne, un `SI` dont la condition n'est pas booléenne) **empêche le programme de démarrer** ; ce qui est douteux mais défendable se contente d'un avertissement. Le type déclaré est ensuite tenu à l'exécution, et toutes les erreurs s'affichent en français avec leur ligne.
-- **Exécution** avec console interactive (`Lire` attend une saisie), interruptible à tout moment : une boucle infinie s'arrête d'un clic sur **Arrêter**.
+- **Exécution** avec console interactive (`Lire` attend une saisie), interruptible à tout moment : une boucle infinie s'arrête d'un clic sur **Arrêter**. La sortie se copie dans le presse-papier d'un clic.
 - **Débogueur pas à pas** : une instruction à la fois, ligne courante surlignée, explication de ce qui se passe, et panneau des variables mis à jour en direct. Mode automatique disponible.
 - **Traduction en Python**, pour transposer un algorithme connu vers un langage réel.
 - **15 exemples** prêts à charger, du plus simple au tri à bulle.
@@ -174,7 +174,7 @@ L'interpréteur et le transpileur implémentent le **même visiteur** sur l'arbr
 ## Tests
 
 ```bash
-flutter test        # 237 tests
+flutter test        # 242 tests
 flutter analyze     # doit rester à « No issues found! »
 ```
 

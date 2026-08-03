@@ -46,42 +46,35 @@ class _ConsolePanelState extends ConsumerState<ConsolePanel> {
     completer.complete(valeur);
   }
 
+  /// Envoie la sortie de la console dans le presse-papier, et dit ce qui a
+  /// été copié : sans retour visible, on ne sait pas si le clic a pris.
   void _copierConsole() {
-    final consoleState = ref.watch(consoleProvider);
-    final ligneCount = consoleState.lines.length;
-    final texteACopier = consoleState.lines.join('\n');
+    final console = ref.read(consoleProvider);
+    final nombre = console.nombreDeLignes;
+    final texte = console.texte;
 
-    if (texteACopier.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Console vide - rien à copier'),
-          duration: Duration(seconds: 2),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (texte.isEmpty) {
+      _annoncer('Console vide : rien à copier', Colors.orange);
       return;
     }
 
-    Clipboard.setData(ClipboardData(text: texteACopier)).then((_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$ligneCount lignes copiées'),
-          duration: Duration(seconds: 2),
-          backgroundColor: SenAlgoTheme.neonGreen,
-        ),
-      );
+    Clipboard.setData(ClipboardData(text: texte)).then((_) {
+      _annoncer('$nombre ligne${nombre > 1 ? "s" : ""} copiée${nombre > 1 ? "s" : ""}',
+          SenAlgoTheme.neonGreen);
     }).catchError((error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erreur lors de la copie : $error'),
-          duration: const Duration(seconds: 2),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      _annoncer('Erreur lors de la copie : $error', Colors.redAccent);
     });
+  }
+
+  void _annoncer(String message, Color couleur) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        backgroundColor: couleur,
+      ),
+    );
   }
 
   @override
