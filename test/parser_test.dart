@@ -106,4 +106,28 @@ FIN
 ''');
     });
   });
+
+  group('Signature de fonction', () {
+    test('sans type de retour, le message dit quoi écrire', () {
+      const source = '''
+Fonction ok()
+DEBUT
+  Afficher "alors"
+Fin
+
+ALGORITHME T
+DEBUT
+  ecrire("x")
+FIN''';
+      expect(
+        () => Parser(Lexer(source).scanTokens()).parse(),
+        throwsA(allOf(
+          contains('il manque le type renvoyé'),
+          contains('PROCEDURE'),
+          // La signature est ligne 1, le jeton buté ligne 2.
+          contains('ligne 1'),
+        )),
+      );
+    });
+  });
 }

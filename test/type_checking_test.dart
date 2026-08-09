@@ -7,8 +7,9 @@ import 'package:test/test.dart';
 
 /// Enveloppe [corps] dans un programme déclarant les variables usuelles.
 ///
-/// Les déclarations occupent les lignes 1 à 11, le corps commence donc à la
-/// ligne 12 : les tests qui vérifient un numéro de ligne s'appuient dessus.
+/// Les déclarations et les initialisations occupent les lignes 1 à 17, le
+/// corps commence donc à la ligne 18 : les tests qui vérifient un numéro de
+/// ligne s'appuient dessus.
 String _programme(String corps) => '''
 ALGORITHME T
 CONSTANTES
@@ -21,6 +22,12 @@ VARIABLES
   b : booleen
   t : TABLEAU[1..5] DE entier
 DEBUT
+  n <- 0
+  m <- 0
+  r <- 0
+  s <- ""
+  c <- 'a'
+  b <- vrai
   ${corps.replaceAll('\n', '\n  ')}
 FIN
 ''';
@@ -108,7 +115,7 @@ void main() {
     });
 
     test('le signalement porte le numéro de ligne du fautif', () {
-      expect(_erreurs('n <- 1\nn <- "x"').single.line, equals(13));
+      expect(_erreurs('n <- 1\nn <- "x"').single.line, equals(19));
     });
   });
 
@@ -270,7 +277,7 @@ DEBUT
     test('une chaîne affectée à un entier arrête le programme', () async {
       final e = await _erreurExecution('n <- "abc"');
       expect(e, contains("'n' est un entier"));
-      expect(e, contains('ligne 12'));
+      expect(e, contains('ligne 18'));
     });
 
     test('un entier affecté à un booléen arrête le programme', () async {

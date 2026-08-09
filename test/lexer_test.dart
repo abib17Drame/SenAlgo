@@ -42,4 +42,11 @@ FIN
     expect(tokens[4].type, TokenType.JUSQUA);
     expect(tokens[5].type, TokenType.FINSI);
   });
+
+  test("Les quatre écritures de JUSQU'À sont acceptées", () {
+    for (final ecriture in ["jusqu'à", "jusqu'a", 'jusquà', 'jusqua']) {
+      final tokens = Lexer('repeter $ecriture').scanTokens();
+      expect(tokens[1].type, TokenType.JUSQUA, reason: ecriture);
+    }
+  });
 }

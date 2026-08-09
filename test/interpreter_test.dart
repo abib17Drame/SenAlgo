@@ -153,4 +153,68 @@ FIN
     await interpreter.interpret(program);
     expect(output, equals("avant"));
   });
+
+  group('Sous-programmes', () {
+    Future<String> executer(String source) async {
+      var sortie = '';
+      final programme = Parser(Lexer(source).scanTokens()).parse();
+      await Interpreter(onPrint: (m) => sortie += m, onRead: () async => '0')
+          .interpret(programme);
+      return sortie;
+    }
+
+    test('un tableau se passe avec la syntaxe des déclarations', () async {
+      const source = '''
+ALGORITHME T
+FONCTION Somme(t : TABLEAU[1..3] DE entier) : entier
+VARIABLES i, s : entier
+DEBUT
+  s <- 0
+  POUR i ALLANT DE 1 à 3 FAIRE
+    s <- s + t[i]
+  FINPOUR
+  RETOURNER s
+FIN
+VARIABLES tab : TABLEAU[1..3] DE entier
+DEBUT
+  tab[1] <- 1
+  tab[2] <- 2
+  tab[3] <- 3
+  ecrire(Somme(tab))
+FIN''';
+      expect(await executer(source), equals('6'));
+    });
+
+    test('la syntaxe sans bornes reste acceptée', () async {
+      const source = '''
+ALGORITHME T
+FONCTION Premier(t : tableau de entier) : entier
+DEBUT
+  RETOURNER t[1]
+FIN
+VARIABLES tab : TABLEAU[1..2] DE entier
+DEBUT
+  tab[1] <- 9
+  ecrire(Premier(tab))
+FIN''';
+      expect(await executer(source), equals('9'));
+    });
+
+    // L'analyse bloque le cas sans aucun RETOURNER. Ici il y en a un, mais sur
+    // un chemin non emprunté : l'appel valait null et s'affichait tel quel.
+    test('une fonction qui sort sans RETOURNER est arrêtée', () async {
+      const source = '''
+ALGORITHME T
+FONCTION F(n : entier) : entier
+DEBUT
+  SI n > 0 ALORS
+    RETOURNER 1
+  FINSI
+FIN
+DEBUT
+  ecrire(F(0))
+FIN''';
+      await expectLater(executer(source), throwsA(contains('sans RETOURNER')));
+    });
+  });
 }

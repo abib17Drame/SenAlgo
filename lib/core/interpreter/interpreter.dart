@@ -141,23 +141,10 @@ class Interpreter implements ASTVisitor<dynamic> {
     final size = upper - lower + 1;
     if (size <= 0) throw "Taille de tableau invalide ($lower..$upper).";
     
-    dynamic defaultValue;
-    String cleanType = node.baseType.toLowerCase();
-    // Support D'ENTIER, D' REEL, etc.
-    if (cleanType.startsWith("'")) cleanType = cleanType.substring(1);
-    if (cleanType.endsWith("'")) cleanType = cleanType.substring(0, cleanType.length - 1);
-    cleanType = cleanType.trim();
-
-    switch (cleanType) {
-      case 'entier': defaultValue = 0; break;
-      case 'reel': 
-      case 'réel': defaultValue = 0.0; break;
-      case 'booleen': 
-      case 'booléen': defaultValue = false; break;
-      case 'chaine': 
-      case 'chaîne': defaultValue = ""; break;
-      default: defaultValue = null;
-    }
+    // « tableau d'entiers » donne le type « d'entiers » : sans normalisation,
+    // aucun cas ne correspond et le tableau se remplit de vides.
+    final cleanType = _typeCanonique(node.baseType);
+    final defaultValue = _defaultForType(cleanType);
     
     for (final id in node.identifiers) {
       environment.define(id, ArrayData(lower: lower, upper: upper, values: List.filled(size, defaultValue), baseType: cleanType), "tableau");
@@ -326,7 +313,14 @@ class Interpreter implements ASTVisitor<dynamic> {
     if (builtins.contains(calleeLower)) {
       final List<dynamic> args = [];
       for (var arg in node.arguments) {
-        args.add(await _evaluate(arg));
+        final valeur = await _evaluate(arg);
+        // Seul un appel de procédure peut donner ça : sans le refuser ici, la
+        // console afficherait « null ».
+        if (valeur == null) {
+          throw "'${node.callee}' a reçu quelque chose qui ne vaut rien : "
+              "une procédure ne renvoie aucune valeur à afficher.";
+        }
+        args.add(valeur);
       }
       switch (calleeLower) {
         case 'ecrire':
@@ -360,14 +354,13 @@ class Interpreter implements ASTVisitor<dynamic> {
               onVariableChanged?.call(environment.getAllValues());
               return castedValue;
             } else if (firstArg is ArrayAccessNode) {
-              final array = environment.get(firstArg.name.lexeme);
-              if (array is! ArrayData) throw "'${firstArg.name.lexeme}' n'est pas un tableau.";
-              final index = _indice(await _evaluate(firstArg.index), firstArg.name.lexeme, firstArg.name.line);
-              if (index < array.lower || index > array.upper) throw "Index hors limites: $index";
-              final castedValue = _cast(input, array.baseType, "${firstArg.name.lexeme}[$index]", firstArg.name.line);
-              array.values[index - array.lower] = castedValue;
-              onVariableChanged?.call(environment.getAllValues());
-              return castedValue;
+              return await _saisirDansTableau(
+                  firstArg.name.lexeme, firstArg.index, input, firstArg.name.line);
+            } else if (firstArg is CallNode && firstArg.arguments.length == 1) {
+              // t(i) s'analyse comme un appel : c'est un accès au tableau t dès
+              // lors que t en est un.
+              return await _saisirDansTableau(firstArg.callee,
+                  firstArg.arguments.first, input, firstArg.anchor?.line);
             }
           }
           return input;
@@ -622,22 +615,28 @@ class Interpreter implements ASTVisitor<dynamic> {
     }
   }
 
+  /// Range [saisie] dans la case [indice] du tableau [nom].
+  Future<dynamic> _saisirDansTableau(
+      String nom, ASTNode indice, String saisie, int? ligne) async {
+    final tableau = environment.get(nom);
+    if (tableau is! ArrayData) throw "'$nom' n'est pas un tableau.";
+    final i = _indice(await _evaluate(indice), nom, ligne);
+    if (i < tableau.lower || i > tableau.upper) {
+      throw "Index hors limites: $i (Taille: ${tableau.lower}..${tableau.upper})";
+    }
+    final valeur = _cast(saisie, tableau.baseType, "$nom[$i]", ligne);
+    tableau.values[i - tableau.lower] = valeur;
+    onVariableChanged?.call(environment.getAllValues());
+    return valeur;
+  }
+
   dynamic _defaultForType(String type) {
-    var t = type.toLowerCase().trim();
-    if (t.startsWith("'")) t = t.substring(1);
-    if (t.endsWith("'")) t = t.substring(0, t.length - 1);
-    t = t.trim();
-    if (t.endsWith('s')) t = t.substring(0, t.length - 1);
-    switch (t) {
+    switch (_typeCanonique(type)) {
       case 'entier': return 0;
-      case 'reel':
-      case 'réel': return 0.0;
-      case 'chaine':
-      case 'chaîne': return "";
-      case 'booleen':
-      case 'booléen': return false;
-      case 'caractere':
-      case 'caractère': return "";
+      case 'reel': return 0.0;
+      case 'chaine': return "";
+      case 'booleen': return false;
+      case 'caractere': return "";
       default: return null;
     }
   }
@@ -833,8 +832,8 @@ class SenAlgoFunction implements SenAlgoCallable {
   SenAlgoFunction(this.declaration, this.closure);
 
   @override
-  Future<dynamic> call(Interpreter interpreter, List<ASTNode> argumentNodes) {
-    return _callSubroutine(
+  Future<dynamic> call(Interpreter interpreter, List<ASTNode> argumentNodes) async {
+    final valeur = await _callSubroutine(
       interpreter: interpreter,
       parameters: declaration.parameters,
       declarations: declaration.declarations,
@@ -842,6 +841,12 @@ class SenAlgoFunction implements SenAlgoCallable {
       closure: closure,
       argumentNodes: argumentNodes,
     );
+    // Sans RETOURNER, l'appel vaudrait null et s'afficherait tel quel.
+    if (valeur == null) {
+      throw "La fonction '${declaration.name}' s'est terminée sans RETOURNER : "
+          "elle n'a aucune valeur à donner.";
+    }
+    return valeur;
   }
 }
 

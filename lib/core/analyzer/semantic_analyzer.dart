@@ -50,6 +50,9 @@ class _Portee {
   /// d'affectation.
   final Set<String> constantes = {};
 
+  /// Noms auxquels une valeur a déjà été donnée.
+  final Set<String> initialisees = {};
+
   final _Portee? parent;
 
   _Portee({this.parent});
@@ -57,6 +60,20 @@ class _Portee {
   TypeSenAlgo? chercher(String nom) => variables[nom] ?? parent?.chercher(nom);
   bool contient(String nom) => chercher(nom) != null;
   void declarer(String nom, TypeSenAlgo type) => variables[nom] = type;
+
+  /// Note que [nom] a reçu une valeur, dans la portée où il est déclaré.
+  void marquerInitialisee(String nom) {
+    if (variables.containsKey(nom)) {
+      initialisees.add(nom);
+    } else {
+      parent?.marquerInitialisee(nom);
+    }
+  }
+
+  bool estInitialisee(String nom) {
+    if (variables.containsKey(nom)) return initialisees.contains(nom);
+    return parent?.estInitialisee(nom) ?? false;
+  }
 
   void declarerConstante(String nom, TypeSenAlgo type) {
     variables[nom] = type;
@@ -168,6 +185,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
   @override
   TypeSenAlgo visitConstDeclaration(ConstDeclarationNode node) {
     _portee.declarerConstante(node.identifier, node.value.accept(this));
+    _portee.marquerInitialisee(node.identifier);
     return TypeSenAlgo.vide;
   }
 
@@ -187,6 +205,9 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     final type = TypeSenAlgo.tableauDe(node.baseType);
     for (final id in node.identifiers) {
       _portee.declarer(id, type);
+      // Les cases ne sont pas suivies une à une : le tableau compte comme
+      // rempli dès sa déclaration.
+      _portee.marquerInitialisee(id);
     }
     return TypeSenAlgo.vide;
   }
@@ -198,7 +219,36 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
   TypeSenAlgo visitFunctionDeclaration(FunctionDeclarationNode node) {
     _analyserSousProgramme(node.parameters, node.declarations, node.body,
         retour: TypeSenAlgo.depuisNom(node.returnType));
+    // Un corps sans aucun RETOURNER ne peut rien donner, quel que soit le
+    // chemin suivi. Les cas partiels, eux, restent à l'exécution.
+    if (!_contientRetourAvecValeur(node.body)) {
+      _erreur(
+        "la fonction '${node.name}' ne renvoie jamais de valeur : il lui "
+        "manque un RETOURNER.",
+        node.anchor,
+      );
+    }
     return TypeSenAlgo.vide;
+  }
+
+  /// Cherche un `RETOURNER` suivi d'une valeur, à n'importe quelle profondeur.
+  bool _contientRetourAvecValeur(ASTNode noeud) {
+    if (noeud is ReturnNode) return noeud.value != null;
+    if (noeud is BlockNode) return noeud.statements.any(_contientRetourAvecValeur);
+    if (noeud is IfNode) {
+      return _contientRetourAvecValeur(noeud.thenBranch) ||
+          noeud.elseIfs.any((e) => _contientRetourAvecValeur(e.body)) ||
+          (noeud.elseBranch != null && _contientRetourAvecValeur(noeud.elseBranch!));
+    }
+    if (noeud is WhileNode) return _contientRetourAvecValeur(noeud.body);
+    if (noeud is ForNode) return _contientRetourAvecValeur(noeud.body);
+    if (noeud is RepeatNode) return _contientRetourAvecValeur(noeud.body);
+    if (noeud is SelonNode) {
+      return noeud.cases.any((c) => _contientRetourAvecValeur(c.body)) ||
+          (noeud.defaultBranch != null &&
+              _contientRetourAvecValeur(noeud.defaultBranch!));
+    }
+    return false;
   }
 
   @override
@@ -223,6 +273,11 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
         p.name,
         p.isArray ? TypeSenAlgo.tableauDe(p.baseType ?? '') : TypeSenAlgo.depuisNom(p.type),
       );
+      // Un paramètre d'entrée arrive avec la valeur de l'appelant. Un
+      // paramètre 'résultat' n'a rien tant que le sous-programme n'écrit pas.
+      if (p.isArray || p.mode != ParamMode.resultat) {
+        _portee.marquerInitialisee(p.name);
+      }
     }
     for (final d in declarations) {
       d.accept(this);
@@ -245,9 +300,17 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
 
   @override
   TypeSenAlgo visitExpressionStmt(ExpressionStmtNode node) {
+    // Seul cet appel-ci est une instruction : ceux qu'il contient en argument
+    // sont des valeurs, et doivent donc en fournir une.
+    final precedent = _appelInstruction;
+    _appelInstruction = node.expression;
     node.expression.accept(this);
+    _appelInstruction = precedent;
     return TypeSenAlgo.vide;
   }
+
+  /// L'appel qui tient lieu d'instruction à lui seul, s'il y en a un.
+  ASTNode? _appelInstruction;
 
   @override
   TypeSenAlgo visitAssignment(AssignmentNode node) {
@@ -268,6 +331,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     if (!cible.accepte(valeur)) {
       _signalerAffectation(node.identifier, cible, valeur, node.anchor);
     }
+    _portee.marquerInitialisee(node.identifier);
     return TypeSenAlgo.vide;
   }
 
@@ -408,6 +472,7 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     if (!_portee.contient(node.identifier)) {
       _portee.declarer(node.identifier, TypeSenAlgo.entier);
     }
+    _portee.marquerInitialisee(node.identifier);
     node.body.accept(this);
     return TypeSenAlgo.vide;
   }
@@ -467,7 +532,33 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       _erreur("la variable '$nom' n'est pas déclarée.", node.name);
       return TypeSenAlgo.inconnu;
     }
+    _verifierInitialisee(nom, type, node.name);
     return type;
+  }
+
+  /// Avertit si [nom] est lue avant d'avoir reçu une valeur, puis la tient
+  /// pour initialisée : une seule fois par variable.
+  void _verifierInitialisee(String nom, TypeSenAlgo type, Token? ancre) {
+    if (_portee.estInitialisee(nom)) return;
+    _portee.marquerInitialisee(nom);
+    _avertir(
+      "'$nom' est utilisée avant d'avoir reçu une valeur : elle vaut "
+      '${_valeurParDefaut(type)}.',
+      ancre,
+    );
+  }
+
+  String _valeurParDefaut(TypeSenAlgo t) {
+    switch (t.base) {
+      case TypeBase.entier:
+        return '0';
+      case TypeBase.reel:
+        return '0.0';
+      case TypeBase.booleen:
+        return 'faux';
+      default:
+        return 'la chaîne vide';
+    }
   }
 
   @override
@@ -609,6 +700,8 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       // peut pas lui attribuer de type a priori. En revanche la cible, elle,
       // doit pouvoir recevoir quelque chose.
       for (final a in node.arguments) {
+        // La saisie remplit la variable : elle n'est pas lue, elle est écrite.
+        if (a is VariableNode) _portee.marquerInitialisee(a.name.lexeme);
         final type = a.accept(this);
         if (a is! VariableNode) continue;
         final cible = a.name.lexeme;
@@ -669,7 +762,15 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
     }
 
     for (var i = 0; i < node.arguments.length; i++) {
-      final typeArg = node.arguments[i].accept(this);
+      final arg = node.arguments[i];
+      // Un paramètre 'résultat' reçoit une valeur au lieu d'en fournir une :
+      // l'argument est écrit par l'appel, pas lu.
+      if (i < signature.parametres.length &&
+          signature.parametres[i].mode == ParamMode.resultat &&
+          arg is VariableNode) {
+        _portee.marquerInitialisee(arg.name.lexeme);
+      }
+      final typeArg = arg.accept(this);
       if (i >= signature.parametres.length) continue;
       final p = signature.parametres[i];
       final attendu = p.isArray
@@ -685,7 +786,6 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       }
       // Un paramètre de sortie doit recevoir quelque chose où écrire.
       if (p.mode != ParamMode.donnee) {
-        final arg = node.arguments[i];
         if (arg is! VariableNode && arg is! ArrayAccessNode) {
           _erreur(
             "le paramètre '${p.name}' de '$nom' est un paramètre de sortie : "
@@ -696,6 +796,17 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       }
     }
 
-    return signature.estFonction ? signature.retour : TypeSenAlgo.vide;
+    if (signature.estFonction) return signature.retour;
+    // Une procédure ne rend rien : l'employer comme valeur donnerait le vide,
+    // que l'exécution afficherait tel quel.
+    if (!identical(node, _appelInstruction)) {
+      _erreur(
+        "'$nom' est une procédure : elle ne renvoie aucune valeur, on ne peut "
+        "donc pas s'en servir dans un calcul ou dans un affichage. "
+        "Appelez-la seule sur sa ligne.",
+        node.anchor,
+      );
+    }
+    return TypeSenAlgo.vide;
   }
 }

@@ -8,7 +8,21 @@ import 'package:test/test.dart';
 List<SemanticDiagnostic> _analyser(String source) =>
     SemanticAnalyzer().analyser(Parser(Lexer(source).scanTokens()).parse());
 
-/// Enveloppe [corps] dans un programme déclarant les variables usuelles.
+/// Comme [_avecVariables], mais sans donner de valeur aux variables : ce que
+/// vérifient les tests sur les variables non initialisées.
+List<SemanticDiagnostic> _brut(String corps) => _analyser('''
+ALGORITHME T
+VARIABLES
+  n, m : entier
+  s : chaine
+  t : TABLEAU[1..5] DE entier
+DEBUT
+$corps
+FIN
+''');
+
+/// Enveloppe [corps] dans un programme déclarant les variables usuelles, et
+/// leur donne une valeur : les autres tests portent sur autre chose.
 List<SemanticDiagnostic> _avecVariables(String corps) => _analyser('''
 ALGORITHME T
 VARIABLES
@@ -18,6 +32,11 @@ VARIABLES
   b : booleen
   t : TABLEAU[1..5] DE entier
 DEBUT
+  n <- 0
+  m <- 0
+  r <- 0
+  s <- ""
+  b <- vrai
 $corps
 FIN
 ''');
@@ -171,10 +190,10 @@ FIN
 
   group('Les avertissements portent une ligne exploitable', () {
     test('la ligne signalée est celle de la faute', () {
-      // L'en-tête occupe 8 lignes, donc « n <- 1 » est en 9 et la faute en 10.
+      // L'en-tête occupe 13 lignes, donc « n <- 1 » est en 14 et la faute en 15.
       final w = _avecVariables('  n <- 1\n  n <- "oops"');
       expect(w, hasLength(1));
-      expect(w.first.line, equals(10));
+      expect(w.first.line, equals(15));
     });
   });
 
@@ -195,6 +214,141 @@ FIN
     test('un type inconnu est toujours accepté', () {
       expect(TypeSenAlgo.entier.accepte(TypeSenAlgo.inconnu), isTrue);
       expect(TypeSenAlgo.inconnu.accepte(TypeSenAlgo.chaine), isTrue);
+    });
+  });
+
+  group('Variables non initialisées', () {
+    test('lire une variable jamais affectée est signalé', () {
+      final d = _brut('  ecrire(n)');
+      expect(d, hasLength(1));
+      expect(d.single.message, contains("'n' est utilisée avant"));
+    });
+
+    test('la valeur par défaut annoncée est celle du type', () {
+      expect(_brut('  ecrire(n)').single.message, contains('elle vaut 0.'));
+      expect(_brut('  ecrire(s)').single.message, contains('la chaîne vide'));
+    });
+
+    test("c'est un avertissement, pas une erreur", () {
+      expect(_brut('  ecrire(n)').single.estErreur, isFalse);
+    });
+
+    test('un total jamais mis à zéro est signalé', () {
+      expect(_brut('  n <- n + 1').single.message, contains("'n' est utilisée avant"));
+    });
+
+    test('affecter avant de lire ne dit rien', () {
+      expect(_brut('  n <- 5\n  ecrire(n)'), isEmpty);
+    });
+
+    test('une saisie remplit la variable', () {
+      expect(_brut('  lire(n)\n  ecrire(n)'), isEmpty);
+    });
+
+    test('un tableau déclaré est tenu pour rempli', () {
+      expect(_brut('  ecrire(t[1])'), isEmpty);
+    });
+
+    test('la variable de boucle du POUR est remplie', () {
+      expect(_brut('  POUR n ALLANT DE 1 à 3 FAIRE\n ecrire(n)\n FINPOUR'), isEmpty);
+    });
+
+    // L'analyse ne suit pas les chemins d'exécution : dès qu'une valeur a pu
+    // être donnée, elle se tait plutôt que d'accuser à tort.
+    test('une affectation dans une seule branche suffit à taire le doute', () {
+      expect(_brut('  SI vrai ALORS\n n <- 1\n FINSI\n ecrire(n)'), isEmpty);
+    });
+
+    test("la même variable ne réclame qu'un seul avertissement", () {
+      expect(_brut('  ecrire(n)\n  ecrire(n)\n  ecrire(n)'), hasLength(1));
+    });
+
+    // Un paramètre 'résultat' écrit dans la variable de l'appelant : la passer
+    // sans valeur est le fonctionnement normal, pas une faute.
+    test("un paramètre 'résultat' remplit la variable passée", () {
+      expect(
+        _analyser('ALGORITHME T\n'
+            'PROCEDURE Remplir(résultat x : entier)\n'
+            'DEBUT\n x <- 7\nFIN\n'
+            'VARIABLES n : entier\n'
+            'DEBUT\n Remplir(n)\n ecrire(n)\nFIN'),
+        isEmpty,
+      );
+    });
+
+    test('une fonction sans RETOURNER est refusée', () {
+      final d = _analyser('ALGORITHME T\n'
+          'FONCTION F(n : entier) : entier\n'
+          'DEBUT\n ecrire(n)\nFIN\n'
+          'DEBUT\n ecrire(F(1))\nFIN');
+      expect(d.where((x) => x.estErreur), hasLength(1));
+      expect(d.first.message, contains('ne renvoie jamais de valeur'));
+    });
+
+    test('un RETOURNER caché dans un SI suffit', () {
+      expect(
+        _analyser('ALGORITHME T\n'
+            'FONCTION F(n : entier) : entier\n'
+            'DEBUT\n SI n > 0 ALORS\n RETOURNER 1\n FINSI\n RETOURNER 0\nFIN\n'
+            'DEBUT\n ecrire(F(1))\nFIN'),
+        isEmpty,
+      );
+    });
+
+    test("un paramètre 'donnée-résultat' apporte une valeur", () {
+      expect(
+        _analyser('ALGORITHME T\n'
+            'PROCEDURE Doubler(donnée-résultat x : entier)\n'
+            'DEBUT\n x <- x * 2\nFIN\n'
+            'VARIABLES n : entier\n'
+            'DEBUT\n n <- 3\n Doubler(n)\nFIN'),
+        isEmpty,
+      );
+    });
+  });
+
+  group('Une procédure ne renvoie rien', () {
+    const procedure = '''
+ALGORITHME T
+PROCEDURE ok()
+DEBUT
+  ecrire("alors")
+FIN
+VARIABLES n : entier
+DEBUT
+''';
+
+    test('appelée seule, elle est à sa place', () {
+      expect(_analyser('$procedure  ok()\nFIN'), isEmpty);
+    });
+
+    test('affichée, elle est refusée', () {
+      final d = _analyser('$procedure  ecrire(ok())\nFIN');
+      expect(d.where((x) => x.estErreur), hasLength(1));
+      expect(d.first.message, contains('est une procédure'));
+    });
+
+    test('affectée, elle est refusée', () {
+      expect(_analyser('$procedure  n <- ok()\nFIN').first.message,
+          contains('est une procédure'));
+    });
+
+    test('dans un calcul, elle est refusée', () {
+      expect(_analyser('$procedure  n <- 1 + ok()\nFIN').first.message,
+          contains('est une procédure'));
+    });
+
+    test('une fonction appelée seule reste permise', () {
+      const source = '''
+ALGORITHME T
+FONCTION f() : entier
+DEBUT
+  RETOURNER 1
+FIN
+DEBUT
+  f()
+FIN''';
+      expect(_analyser(source), isEmpty);
     });
   });
 }

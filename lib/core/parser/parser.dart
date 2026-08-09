@@ -98,11 +98,19 @@ class Parser {
   }
 
   FunctionDeclarationNode _functionDeclaration() {
-    final name = _consumeIdentifier("de fonction").lexeme;
+    final nameToken = _consumeIdentifier("de fonction");
+    final name = nameToken.lexeme;
     _consume(TokenType.PAREN_OUVRANTE, "( attendue.");
     final params = _parameters();
     _consume(TokenType.PAREN_FERMANTE, ") attendue.");
-    _consume(TokenType.DEUX_POINTS, ": attendu.");
+    // La ligne citée est celle de la signature, pas celle du jeton buté :
+    // c'est là que le type manque et que l'utilisateur doit écrire.
+    if (!_check(TokenType.DEUX_POINTS)) {
+      throw "Erreur ligne ${nameToken.line}: il manque le type renvoyé par la "
+          "fonction '$name'. Écrivez « FONCTION $name(...) : entier », avec le "
+          "type voulu. Si elle ne renvoie rien, c'est une PROCEDURE.";
+    }
+    _advance();
     final returnType = _advance().lexeme;
     final localDecls = _localDeclarations();
     _consume(TokenType.DEBUT, "DEBUT attendu.");
@@ -166,6 +174,13 @@ class Parser {
           mode = ParamMode.resultat;
         }
         final name = _consumeIdentifier("de paramètre").lexeme;
+        // Plusieurs noms peuvent partager un statut et un type :
+        // « résultats mini, maxi : réels ». Une virgule à la place du ':'
+        // les désigne, puisqu'un paramètre s'écrit toujours « nom : type ».
+        final noms = <String>[name];
+        while (!_check(TokenType.PAREN_OUVRANTE) && _match(TokenType.VIRGULE)) {
+          noms.add(_consumeIdentifier("de paramètre").lexeme);
+        }
         // Paramètre tableau : nom(borneInf : borneSup) : tableau de type
         if (_match(TokenType.PAREN_OUVRANTE)) {
           final lower = _expression();
@@ -176,17 +191,40 @@ class Parser {
           _consume(TokenType.T_TABLEAU, "TABLEAU attendu.");
           _match(TokenType.DANS); // 'de'
           final baseType = _advance().lexeme;
-          params.add(Parameter(name: name, type: 'tableau de $baseType', mode: mode, isArray: true, lowerBound: lower, upperBound: upper, baseType: baseType));
+          for (final n in noms) {
+            params.add(Parameter(name: n, type: 'tableau de $baseType', mode: mode, isArray: true, lowerBound: lower, upperBound: upper, baseType: baseType));
+          }
           continue;
         }
         _consume(TokenType.DEUX_POINTS, ": attendu.");
         if (_match(TokenType.T_TABLEAU)) {
+          // Bornes facultatives : le paramètre reçoit celles de l'appelant.
+          ASTNode? lower;
+          ASTNode? upper;
+          if (_match(TokenType.CROCHET_OUVRANT)) {
+            lower = _expression();
+            _consume(TokenType.POINT_POINT, ".. attendu.");
+            upper = _expression();
+            _consume(TokenType.CROCHET_FERMANT, "] attendu.");
+          }
           _match(TokenType.DANS);
           final baseType = _advance().lexeme;
-          params.add(Parameter(name: name, type: 'tableau de $baseType', mode: mode, isArray: true, baseType: baseType));
+          for (final n in noms) {
+            params.add(Parameter(
+              name: n,
+              type: 'tableau de $baseType',
+              mode: mode,
+              isArray: true,
+              lowerBound: lower,
+              upperBound: upper,
+              baseType: baseType,
+            ));
+          }
         } else {
           final type = _advance().lexeme;
-          params.add(Parameter(name: name, type: type, mode: mode));
+          for (final n in noms) {
+            params.add(Parameter(name: n, type: type, mode: mode));
+          }
         }
       } while (_match(TokenType.VIRGULE));
     }
@@ -283,7 +321,10 @@ class Parser {
 
   ASTNode _ifStatement(Token anchor) {
     final condition = _dansGroupement(_expression);
-    _consume(TokenType.ALORS, "ALORS attendu.");
+    final alors = _consume(TokenType.ALORS, "ALORS attendu.");
+    if (!_isAtEnd() && _peek().line == alors.line && !_check(TokenType.FINSI)) {
+      return _ifCourt(anchor, condition);
+    }
     final List<ASTNode> thenStmts = [];
     final List<ElseIfNode> elseIfs = [];
     BlockNode? elseBranch;
@@ -302,6 +343,32 @@ class Parser {
     }
     _consume(TokenType.FINSI, "FINSI attendu.");
     return IfNode(condition: condition, thenBranch: BlockNode(statements: thenStmts), elseIfs: elseIfs, elseBranch: elseBranch)..anchor = anchor;
+  }
+
+  /// `Si … Alors <instruction>`, tenant sur une ligne.
+  ///
+  /// Ce qui suit ALORS sur sa ligne est l'unique instruction de la branche :
+  /// aucun FINSI n'est attendu, et s'il y en a un il est accepté. Quand rien
+  /// ne suit ALORS, c'est la forme en bloc, fermée par FINSI.
+  ASTNode _ifCourt(Token anchor, ASTNode condition) {
+    final thenStmt = _statement();
+    final List<ElseIfNode> elseIfs = [];
+    BlockNode? elseBranch;
+    while (_match(TokenType.SINONSI)) {
+      final cond = _dansGroupement(_expression);
+      _consume(TokenType.ALORS, "ALORS attendu.");
+      elseIfs.add(ElseIfNode(condition: cond, body: BlockNode(statements: [_statement()])));
+    }
+    if (_match(TokenType.SINON)) {
+      elseBranch = BlockNode(statements: [_statement()]);
+    }
+    _match(TokenType.FINSI);
+    return IfNode(
+      condition: condition,
+      thenBranch: BlockNode(statements: [thenStmt]),
+      elseIfs: elseIfs,
+      elseBranch: elseBranch,
+    )..anchor = anchor;
   }
 
   ASTNode _whileStatement(Token anchor) {
@@ -344,8 +411,14 @@ class Parser {
     final List<ASTNode> stmts = [];
     while (!_check(TokenType.JUSQUA) && !_isAtEnd()) { stmts.add(_statement()); }
     _consume(TokenType.JUSQUA, "jusqu'à attendu.");
-    final condition = _expression();
-    return RepeatNode(body: BlockNode(statements: stmts), condition: condition)..anchor = anchor;
+    final precedent = _conditionJusqua;
+    _conditionJusqua = true;
+    try {
+      final condition = _expression();
+      return RepeatNode(body: BlockNode(statements: stmts), condition: condition)..anchor = anchor;
+    } finally {
+      _conditionJusqua = precedent;
+    }
   }
 
   ASTNode _returnStatement(Token anchor) {
@@ -373,12 +446,12 @@ class Parser {
     BlockNode? defaultBranch;
     while (!_check(TokenType.FINCAS) && !_isAtEnd()) {
       if (_match(TokenType.SINON)) {
-        defaultBranch = BlockNode(statements: [_statement()]);
+        defaultBranch = BlockNode(statements: [_dansCasDeSelon(_statement)]);
         continue;
       }
       final guard = _selonCaseGuard(selonExpr);
       _consume(TokenType.DEUX_POINTS, ": attendu après la valeur du cas SELON.");
-      final stmt = _statement();
+      final stmt = _dansCasDeSelon(_statement);
       cases.add(SelonCaseNode(guard: guard, body: BlockNode(statements: [stmt])));
     }
     _consume(TokenType.FINCAS, "FINSELON attendu.");
@@ -435,7 +508,45 @@ class Parser {
   /// Entre parenthèses ou crochets en revanche, aucune instruction ne peut
   /// commencer : les retours à la ligne y sont sans importance et l'expression
   /// se poursuit librement.
-  bool _poursuitExpression() => _groupingDepth > 0 || _peek().line == _previous().line;
+  bool _poursuitExpression() =>
+      _groupingDepth > 0 ||
+      _peek().line == _previous().line ||
+      (_conditionJusqua && _prolongeLaCondition(_peek().type));
+
+  /// Vrai pendant l'analyse de la condition d'un `JUSQU'À`.
+  bool _conditionJusqua = false;
+
+  /// Vrai pendant l'analyse du corps d'un cas de `SELON`.
+  bool _dansCasSelon = false;
+
+  /// Analyse [action] comme le corps d'un cas de `SELON`.
+  T _dansCasDeSelon<T>(T Function() action) {
+    final precedent = _dansCasSelon;
+    _dansCasSelon = true;
+    try {
+      return action();
+    } finally {
+      _dansCasSelon = precedent;
+    }
+  }
+
+  static const _operateursBinaires = {
+    TokenType.ET, TokenType.OU,
+    TokenType.EGAL, TokenType.DIFFERENT,
+    TokenType.PLUS_PETIT, TokenType.PLUS_PETIT_EGAL,
+    TokenType.PLUS_GRAND, TokenType.PLUS_GRAND_EGAL,
+    TokenType.PLUS, TokenType.MOINS, TokenType.FOIS, TokenType.DIVISE,
+    TokenType.DIV, TokenType.MOD, TokenType.PUISSANCE,
+  };
+
+  /// Dit si l'opérateur [t], en début de ligne, poursuit la condition d'un
+  /// `JUSQU'À` : aucune instruction ne commence par un opérateur binaire.
+  /// Sauf dans un cas de `SELON`, où la ligne suivante est le cas suivant.
+  bool _prolongeLaCondition(TokenType t) {
+    if (!_operateursBinaires.contains(t)) return false;
+    if (!_dansCasSelon) return true;
+    return !_isComparisonOp(t) && t != TokenType.PLUS && t != TokenType.MOINS;
+  }
 
   /// Analyse [action] dans un contexte où un retour à la ligne ne termine pas
   /// l'expression, parce qu'un délimiteur explicite s'en charge : parenthèses

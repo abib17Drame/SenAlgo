@@ -52,6 +52,27 @@ void main() {
     test('arguments répartis sur plusieurs lignes', () async {
       expect(await _executer('  ecrire(a,\n b,\n c)'), equals('123'));
     });
+
+    test("condition JUSQU'À, opérateur en fin de ligne", () async {
+      expect(
+        await _executer("  REPETER\n a <- a + 1\n JUSQU'À a >= 3 OU\n b < 0\n ecrire(a)"),
+        equals('3'),
+      );
+    });
+
+    test("condition JUSQU'À, opérateur en début de ligne", () async {
+      expect(
+        await _executer("  REPETER\n a <- a + 1\n JUSQU'À a >= 3\n OU b < 0\n ecrire(a)"),
+        equals('3'),
+      );
+    });
+
+    test("condition JUSQU'À coupée avant une comparaison", () async {
+      expect(
+        await _executer("  REPETER\n a <- a + 1\n JUSQU'À a\n >= 3\n ecrire(a)"),
+        equals('3'),
+      );
+    });
   });
 
   group('Le retour à la ligne délimite toujours les instructions', () {
@@ -64,6 +85,21 @@ void main() {
 
     test("une valeur négative en début de ligne n'est pas absorbée", () async {
       expect(await _executer('  a <- 5\n  b <- 0 - 2\n  ecrire(a, " ", b)'), equals('5 -2'));
+    });
+
+    // Dans un SELON, la ligne qui suit un cas est le cas suivant, même quand
+    // ce cas se termine par un JUSQU'À.
+    test("un cas de SELON n'est pas avalé par le JUSQU'À qui le précède", () async {
+      expect(
+        await _executer(
+          '  SELON a FAIRE\n'
+          "  = 1 : REPETER\n a <- a + 1\n JUSQU'À a >= 2\n"
+          '  > 5 : ecrire("grand")\n'
+          '  FINSELON\n'
+          '  ecrire(a)',
+        ),
+        equals('2'),
+      );
     });
   });
 }
