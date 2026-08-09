@@ -204,16 +204,16 @@ jobs:
 
             ### Installation
 
-            **Linux** — extraire l'archive puis lancer `./SenAlgo`.
+            **Linux** : extraire l'archive puis lancer `./SenAlgo`.
             Pour l'ajouter au menu des applications :
             `./packaging/install-desktop-entry.sh .`
 
-            **Windows** — extraire le dossier et lancer `senalgo.exe`.
+            **Windows** : extraire le dossier et lancer `senalgo.exe`.
             SmartScreen affichera un avertissement : l'exécutable n'est pas
             signé par un certificat payant. Cliquer sur « Informations
             complémentaires » puis « Exécuter quand même ».
 
-            **Android** — installer `SenAlgo-universal.apk`. Il faut autoriser
+            **Android** : installer `SenAlgo-universal.apk`. Il faut autoriser
             l'installation d'applications de sources inconnues. Les variantes
             `armeabi-v7a`, `arm64-v8a` et `x86_64` sont plus légères si vous
             connaissez l'architecture de votre appareil.

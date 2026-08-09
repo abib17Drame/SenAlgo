@@ -22,11 +22,11 @@ FIN
 
 - **Éditeur** avec coloration syntaxique, autocomplétion (mots-clés du langage **et** noms que tu déclares), indentation automatique des blocs et retour à la ligne activable.
 - **Diagnostics en direct** : les erreurs de syntaxe sont signalées pendant la frappe, avec le numéro de ligne, sans avoir à lancer le programme.
-- **Vérification des types**, à deux niveaux : ce qui est certainement faux (`n : entier` recevant une chaîne, un `SI` dont la condition n'est pas booléenne) **empêche le programme de démarrer** ; ce qui est douteux mais défendable se contente d'un avertissement. Le type déclaré est ensuite tenu à l'exécution, et toutes les erreurs s'affichent en français avec leur ligne.
+- **Vérification des types**, à deux niveaux : ce qui est certainement faux (`n : entier` recevant une chaîne, un `SI` dont la condition n'est pas booléenne) **empêche le programme de démarrer** ; ce qui est douteux mais défendable se contente d'un avertissement, y compris une variable lue avant d'avoir reçu une valeur. Le type déclaré est ensuite tenu à l'exécution, et toutes les erreurs s'affichent en français avec leur ligne.
 - **Exécution** avec console interactive (`Lire` attend une saisie), interruptible à tout moment : une boucle infinie s'arrête d'un clic sur **Arrêter**. La sortie se copie dans le presse-papier d'un clic.
 - **Débogueur pas à pas** : une instruction à la fois, ligne courante surlignée, explication de ce qui se passe, et panneau des variables mis à jour en direct. Mode automatique disponible.
 - **Traduction en Python**, pour transposer un algorithme connu vers un langage réel.
-- **15 exemples** prêts à charger, du plus simple au tri à bulle.
+- **19 exemples** prêts à charger, du plus simple aux sous-programmes : procédure avec paramètre, fonction de saisie contrôlée, paramètres `résultat` et `donnée-résultat`.
 - **Ouverture et sauvegarde** de fichiers `.algo`, et **reprise automatique** : le programme en cours est retrouvé au lancement suivant, même après une fermeture brutale.
 
 ## Installation
@@ -82,10 +82,10 @@ Les caractères se comparent dans l'ordre ASCII, donc `'Z' < 'a'` est vrai.
 | Construction | Écriture |
 |---|---|
 | Affectation | `x <- 5` (aussi `←`, `:=`, `->`) |
-| Condition | `SI … ALORS … SINONSI … ALORS … SINON … FINSI` |
+| Condition | `SI … ALORS … SINONSI … ALORS … SINON … FINSI`, ou `SI … ALORS` suivi d'une seule instruction sur la même ligne, sans `FINSI` |
 | Boucle bornée | `POUR i ALLANT DE 1 à 10 [PAS 2] FAIRE … FINPOUR` |
-| Boucle conditionnelle | `TANT QUE … FAIRE … FINTANTQUE` |
-| Boucle à sortie | `REPETER … JUSQU'À …` (aussi `JUSQUA`, sans apostrophe ni accent) |
+| Boucle conditionnelle | `TANT QUE … FAIRE … FINTANTQUE` (aussi `FINTQ`) |
+| Boucle à sortie | `REPETER … JUSQU'À …` (aussi `JUSQU'A`, `JUSQUÀ`, `JUSQUA`) |
 | Sélection | `SELON expr FAIRE … FINSELON` |
 | Affichage | `ecrire(…)`, `ecrireln(…)`, `afficher(…)` |
 | Saisie | `lire(x)`, `saisir(x)` |
@@ -132,6 +132,30 @@ DEBUT
 FIN
 ```
 
+Un tableau se passe en paramètre avec l'une ou l'autre notation des
+déclarations, bornes comprises ou non :
+
+```
+FONCTION Somme(t : TABLEAU[1..3] DE entier) : entier
+FONCTION Somme(t(1 : 3) : tableau d'entiers) : entier
+FONCTION Somme(t : tableau de entier) : entier
+```
+
+Plusieurs paramètres partagent un statut et un type quand ils sont écrits
+ensemble, et `résultat` accepte le pluriel :
+
+```
+PROCEDURE MinMax(donnée t(1 : 30) : tableau de réels, résultats mini, maxi : réel)
+```
+
+La récursivité fonctionne. Une fonction dont le corps ne contient aucun
+`RETOURNER` est refusée avant l'exécution ; si elle sort par un chemin qui n'en
+rencontre pas, l'exécution s'arrête avec un message plutôt que de rendre une
+valeur vide.
+
+Une **procédure ne renvoie rien** : elle s'appelle seule sur sa ligne. L'employer
+dans un calcul ou dans un `ecrire` est refusé avant l'exécution.
+
 ### Opérateurs
 
 - Arithmétiques : `+` `-` `*` `/` `DIV` (division entière) `MOD` (reste) `^` (puissance, ou `**`)
@@ -174,16 +198,16 @@ L'interpréteur et le transpileur implémentent le **même visiteur** sur l'arbr
 ## Tests
 
 ```bash
-flutter test        # 242 tests
+flutter test        # 351 tests
 flutter analyze     # doit rester à « No issues found! »
 ```
 
-La couverture porte sur l'analyse lexicale, l'analyse syntaxique, l'analyse sémantique, l'exécution, la traduction Python, la validité de chacun des 15 exemples, et l'absence de débordement d'affichage sur six tailles d'écran allant de 320×568 à 1920×1080.
+La couverture porte sur l'analyse lexicale, l'analyse syntaxique, l'analyse sémantique, l'exécution, la traduction Python, la validité de chacun des 19 exemples, et l'absence de débordement d'affichage sur six tailles d'écran allant de 320×568 à 1920×1080.
 
 Trois familles de tests méritent d'être signalées :
 
 - **Traduction Python vérifiée par exécution.** Chaque programme est exécuté par l'interpréteur SenAlgo *et* par `python3` ; les deux sorties doivent coïncider au caractère près. Une traduction plausible mais fausse ne peut donc pas passer.
-- **Absence de faux positifs.** Les 15 exemples doivent produire zéro avertissement sémantique. Un analyseur qui crie au loup sur du code correct est pire qu'une absence d'analyse : il apprend à ignorer les avertissements, et depuis que les erreurs bloquent l'exécution, un seul faux positif empêcherait carrément de travailler.
+- **Absence de faux positifs.** Les 19 exemples doivent produire zéro avertissement sémantique. Un analyseur qui crie au loup sur du code correct est pire qu'une absence d'analyse : il apprend à ignorer les avertissements, et depuis que les erreurs bloquent l'exécution, un seul faux positif empêcherait carrément de travailler.
 - **Le refus d'exécuter est vérifié par son effet.** Le programme fautif du test affiche quelque chose *avant* la ligne en faute : si le blocage cessait de fonctionner, cet affichage apparaîtrait. Un test qui se contenterait de chercher le message « Exécution refusée » passerait encore.
 
 ## Contribuer
@@ -194,7 +218,6 @@ committer, conventions de code et de messages) tiennent en une page :
 
 ## Limites connues
 
+- **`Fin` ne peut pas servir de nom de variable.** Le mot ferme un bloc, l'accepter comme variable rendrait la fin des sous-programmes indécidable. Le message le dit et propose un autre nom.
 - **Types personnalisés non implémentés.** `Type`, `Structure` et `Enregistrement` sont reconnus par l'analyseur lexical mais lèvent une erreur explicite plutôt que d'être ignorés en silence.
-- **Variables non initialisées.** Lire une variable à laquelle rien n'a encore été affecté donne la valeur par défaut de son type (`0`, `""`, `faux`) sans rien signaler.
-- **`REPETER … JUSQU'À`** est la seule construction dont la condition ne peut pas commencer par un opérateur sur une nouvelle ligne : aucun mot-clé ne la ferme, donc rien n'indiquerait où elle s'arrête. Les parenthèses lèvent la restriction.
 - **Traduction Python** : un tableau dont la borne inférieure ne peut pas être déterminée à la déclaration (paramètre sans bornes explicites) est supposé indexé à partir de 0.

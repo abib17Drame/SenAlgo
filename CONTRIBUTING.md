@@ -43,7 +43,9 @@ flutter analyze     # doit afficher « No issues found! »
 flutter test        # tout doit passer
 ```
 
-La CI lance exactement ces deux commandes. Autant le savoir avant.
+La CI lance exactement ces deux commandes. Autant le savoir avant. Elle refuse
+aussi les fichiers générés listés plus haut, sauf si le titre de la PR annonce
+que c'est le sujet.
 
 ## Une fonctionnalité vient avec son test
 

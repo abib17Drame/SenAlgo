@@ -24,6 +24,41 @@ env:
   FLUTTER_VERSION: "3.41.9"
 
 jobs:
+  # Refuse les fichiers générés dans une PR qui ne les a pas pour sujet.
+  fichiers_generes:
+    name: Fichiers générés
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuser pubspec.lock et .metadata hors sujet
+        env:
+          TITRE: ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s' "$TITRE" | grep -qiE 'd(é|e)pendance|pubspec|flutter [0-9]'; then
+            echo "Le titre annonce une mise à jour de dépendances : rien à vérifier."
+            exit 0
+          fi
+          modifies=$(git diff --name-only \
+            "origin/${{ github.base_ref }}...HEAD" \
+            -- pubspec.lock .metadata '*/flutter/generated_plugins.cmake')
+          if [ -n "$modifies" ]; then
+            echo "Ces fichiers sont produits par les outils et ne doivent pas"
+            echo "voyager avec une fonctionnalité :"
+            echo "$modifies"
+            echo
+            echo "Pour les remettre en état :"
+            echo "  git checkout origin/${{ github.base_ref }} -- $modifies"
+            echo
+            echo "Si la mise à jour est voulue, elle mérite sa propre PR."
+            echo "Voir CONTRIBUTING.md."
+            exit 1
+          fi
+          echo "Aucun fichier généré dans cette PR."
+
   verifications:
     name: Analyse et tests
     runs-on: ubuntu-latest
