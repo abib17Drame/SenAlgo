@@ -206,7 +206,7 @@ VARIABLES
   i, j, temp : entier
   t : TABLEAU [1..5] DE ENTIER
 DEBUT
-  ecrire "--- Saisie du tableau ---\\n"
+  ecrire "--- Saisie du tableau ---\n"
   POUR i DE 1 à 5 FAIRE
     ecrire "Entrez l'élément ", i, " : "
     lire t[i]
@@ -223,11 +223,11 @@ DEBUT
     FINPOUR
   FINPOUR
 
-  ecrire "\\nTableau trié : "
+  ecrire "\nTableau trié : "
   POUR i DE 1 à 5 FAIRE
     ecrire t[i], " "
   FINPOUR
-  ecrire "\\n"
+  ecrire "\n"
 FIN""",
   ),
   ExampleProgram(
@@ -245,7 +245,7 @@ DEBUT
     ≥ 3000 et < 10000 : taux <- 30
     ≥ 10000 : taux <- 40
   FinSelon
-  Afficher "Taux appliqué : ", taux, "%\\n"
+  Afficher "Taux appliqué : ", taux, "%\n"
 FIN""",
   ),
   ExampleProgram(
@@ -295,10 +295,10 @@ VARIABLES
 DEBUT
   x <- 5
   y <- 12
-  Ecrire "Avant échange : x=", x, " y=", y, "\\n"
+  Ecrire "Avant échange : x=", x, " y=", y, "\n"
   Echanger(x, y)
-  Ecrire "Après échange : x=", x, " y=", y, "\\n"
-  Ecrire "Cube de x : ", Cube(x), "\\n"
+  Ecrire "Après échange : x=", x, " y=", y, "\n"
+  Ecrire "Cube de x : ", Cube(x), "\n"
 FIN""",
   ),
   ExampleProgram(
@@ -309,9 +309,134 @@ VARIABLES
 DEBUT
   n <- 1
   Tant que n <= 5 Faire
-    Afficher "n = ", n, "\\n"
+    Afficher "n = ", n, "\n"
     n <- n + 1
   FinTant que
 FIN""",
+  ),
+
+  ExampleProgram(
+    title: "Rectangle d'étoiles (procédure avec paramètre)",
+    startsGroup: true,
+    code: r"""Procédure ligne_Etoile (donnée nombre : entier)
+Variables cpt : entier
+Début
+  Pour cpt de 1 à nombre Faire
+    Afficher "*"
+  FinPour
+  Afficher "\n"
+Fin
+
+Algorithme Rectangle_Etoile
+Variables
+  i, nlignes, netoiles : entier
+Début
+  Afficher "Combien d'étoiles par ligne ? "
+  Saisir netoiles
+  Afficher "Combien de lignes ? "
+  Saisir nlignes
+  Pour i de 1 à nlignes Faire
+    ligne_Etoile (netoiles)
+  FinPour
+Fin""",
+  ),
+  ExampleProgram(
+    title: "Saisie contrôlée (fonction qui redemande)",
+    code: r"""Fonction saisie_nb_positif ( ) : entier
+Variables nb_saisi : entier
+Début
+  Afficher "Entrez un nombre positif : "
+  Saisir nb_saisi
+  Tant que nb_saisi < 0 Faire
+    Afficher "Erreur. Un nombre positif SVP : "
+    Saisir nb_saisi
+  FinTQ
+  Retourner nb_saisi
+Fin
+
+Algorithme ControleSaisie
+Variables n : entier
+Début
+  n <- saisie_nb_positif ( )
+  Afficher "Vous avez saisi ", n, "\n"
+Fin""",
+  ),
+  ExampleProgram(
+    title: "Mini et maxi d'un tableau (paramètres résultats)",
+    code: r"""Procédure Saisietab (résultat untab(1 : 5) : tableau de réels)
+Variables i : entier
+Début
+  Pour i de 1 à 5 Faire
+    Afficher "Note ", i, " : "
+    Saisir untab(i)
+  FinPour
+Fin
+
+Procédure minmax (donnée letab(1 : 5) : tableau de réels, résultats mini, maxi : réel)
+Variables i : entier
+Début
+  mini <- letab(1)
+  maxi <- letab(1)
+  Pour i de 2 à 5 Faire
+    Si letab(i) < mini
+    Alors mini <- letab(i)
+    Si letab(i) > maxi
+    Alors maxi <- letab(i)
+  FinPour
+Fin
+
+Algorithme Notes
+Variables
+  tabnotes(1 : 5) : tableau de réels
+  notemin, notemax : réel
+Début
+  Afficher "Saisissez 5 notes\n"
+  Saisietab(tabnotes)
+  minmax(tabnotes, notemin, notemax)
+  Afficher "La plus haute est ", notemax, "\n"
+  Afficher "La plus basse est ", notemin, "\n"
+Fin""",
+  ),
+  ExampleProgram(
+    title: "Tri par échange (tableau en donnée-résultat)",
+    code: r"""Procédure tabtri (donnée-résultat letab(1 : 5) : tableau d'entiers)
+Variables
+  échange : booléen
+  i, fin1, temp : entier
+Début
+  fin1 <- 5
+  Répéter
+    échange <- faux
+    i <- 1
+    Tant que i < fin1 Faire
+      Si letab(i) > letab(i + 1)
+      Alors
+        échange <- vrai
+        temp <- letab(i)
+        letab(i) <- letab(i + 1)
+        letab(i + 1) <- temp
+      FinSi
+      i <- i + 1
+    FinTQ
+    fin1 <- fin1 - 1
+  Jusqu'à non échange
+Fin
+
+Algorithme Tri
+Variables
+  montab(1 : 5) : tableau d'entiers
+  i : entier
+Début
+  Afficher "Tapez 5 valeurs entières\n"
+  Pour i de 1 à 5 Faire
+    Saisir montab(i)
+  FinPour
+  tabtri(montab)
+  Afficher "Voilà les valeurs triées :\n"
+  Pour i de 1 à 5 Faire
+    Afficher montab(i), " "
+  FinPour
+  Afficher "\n"
+Fin""",
   ),
 ];

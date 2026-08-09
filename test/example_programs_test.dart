@@ -1,11 +1,12 @@
+import 'package:senalgo/core/interpreter/interpreter.dart';
 import 'package:senalgo/core/lexer/lexer.dart';
 import 'package:senalgo/core/parser/parser.dart';
 import 'package:senalgo/ui/examples/example_programs.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('Le menu propose bien 15 exemples, tous nommés', () {
-    expect(kExamplePrograms, hasLength(15));
+  test('Le menu propose bien 19 exemples, tous nommés', () {
+    expect(kExamplePrograms, hasLength(19));
     for (final exemple in kExamplePrograms) {
       expect(exemple.title.trim(), isNotEmpty);
       expect(exemple.code.trim(), isNotEmpty);
@@ -42,5 +43,52 @@ void main() {
         }
       });
     }
+  });
+
+  group("Le \\n des exemples passe bien à la ligne", () {
+    // Écrit « \\n » dans le fichier, l'exemple affichait « \n » en toutes
+    // lettres au lieu de revenir à la ligne.
+    for (final exemple in kExamplePrograms) {
+      test(exemple.title, () {
+        expect(exemple.code.contains(r'\\n'), isFalse);
+      });
+    }
+  });
+
+  group('Les exemples de sous-programmes produisent le bon résultat', () {
+    Future<String> executer(String source, List<String> saisies) async {
+      var sortie = '';
+      var i = 0;
+      final programme = Parser(Lexer(source).scanTokens()).parse();
+      await Interpreter(
+        onPrint: (m) => sortie += m,
+        onRead: () async => i < saisies.length ? saisies[i++] : '0',
+      ).interpret(programme);
+      return sortie;
+    }
+
+    String codeDe(String titre) =>
+        kExamplePrograms.firstWhere((e) => e.title.startsWith(titre)).code;
+
+    test("Rectangle d'étoiles", () async {
+      final s = await executer(codeDe("Rectangle d'étoiles"), ['4', '2']);
+      expect(s, endsWith('****\n****\n'));
+    });
+
+    test('Saisie contrôlée', () async {
+      final s = await executer(codeDe('Saisie contrôlée'), ['-3', '9']);
+      expect(s, endsWith('Vous avez saisi 9\n'));
+    });
+
+    test('Mini et maxi', () async {
+      final s = await executer(codeDe('Mini et maxi'), ['12', '5', '18', '7', '9']);
+      expect(s, contains('La plus haute est 18.0'));
+      expect(s, contains('La plus basse est 5.0'));
+    });
+
+    test('Tri par échange', () async {
+      final s = await executer(codeDe('Tri par échange'), ['5', '3', '9', '1', '7']);
+      expect(s, endsWith('1 3 5 7 9 \n'));
+    });
   });
 }
