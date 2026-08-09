@@ -62,14 +62,25 @@ class ExecutionState {
   final String? errorMessage;
   final int? currentLine;
   final String? explanation;
-  ExecutionState({required this.status, this.errorMessage, this.currentLine, this.explanation});
+
+  /// Le programme a-t-il été refusé avant de démarrer, plutôt que d'échouer en
+  /// route ? La barre d'état le dit sans recopier le message de la console.
+  final bool refuseAvantDemarrage;
+
+  ExecutionState({
+    required this.status,
+    this.errorMessage,
+    this.currentLine,
+    this.explanation,
+    this.refuseAvantDemarrage = false,
+  });
 }
 
 class ExecutionNotifier extends Notifier<ExecutionState> {
   @override
   ExecutionState build() => ExecutionState(status: ExecutionStatus.idle);
-  void setStatus(ExecutionStatus status, {String? error, int? line, String? explanation}) => 
-    state = ExecutionState(status: status, errorMessage: error, currentLine: line ?? state.currentLine, explanation: explanation ?? state.explanation);
+  void setStatus(ExecutionStatus status, {String? error, int? line, String? explanation, bool refuseAvantDemarrage = false}) =>
+    state = ExecutionState(status: status, errorMessage: error, currentLine: line ?? state.currentLine, explanation: explanation ?? state.explanation, refuseAvantDemarrage: refuseAvantDemarrage);
   void setCurrentLine(int? line, {String? explanation}) => state = ExecutionState(status: state.status, errorMessage: state.errorMessage, currentLine: line, explanation: explanation ?? state.explanation);
 }
 
@@ -163,6 +174,7 @@ class Runner {
               ExecutionStatus.error,
               error: erreurs.first.message,
               line: erreurs.first.line,
+              refuseAvantDemarrage: true,
             );
         return;
       }

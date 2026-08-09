@@ -45,8 +45,12 @@ class ExecutionStatusDot extends StatelessWidget {
         return state.explanation != null ? "$base : ${state.explanation}" : base;
       case ExecutionStatus.waitingForInput:
         return "En attente de saisie...";
+      // Le message lui-même est dans la console, en entier et copiable : le
+      // recopier ici le tronquerait pour rien.
       case ExecutionStatus.error:
-        return "Erreur: ${state.errorMessage}";
+        return state.refuseAvantDemarrage
+            ? "Exécution refusée"
+            : "Erreur d'exécution";
       case ExecutionStatus.finished:
         return "Terminé avec succès";
       case ExecutionStatus.stopped:

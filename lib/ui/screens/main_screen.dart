@@ -6,7 +6,6 @@ import '../../state/execution_provider.dart';
 import '../../state/diagnostics_provider.dart';
 import '../theme.dart';
 import '../editor_highlight.dart';
-import 'package:highlight/highlight.dart' show Mode;
 import '../examples/example_programs.dart';
 import '../editor/senalgo_enter_modifier.dart';
 import '../widgets/resizable_split_view.dart';
@@ -63,19 +62,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     _programmeInitial = ref.read(sourceCodeProvider);
     _codeController = CodeController(
       text: _programmeInitial,
-      language: Mode(
-        case_insensitive: true,
-        refs: {},
-        keywords: SenAlgoMode.senalgo['keywords'],
-        contains: [
-          Mode(className: 'string', begin: '"', end: '"'),
-          Mode(className: 'string', begin: "'", end: "'"),
-          Mode(className: 'comment', begin: '//', end: '\$'),
-          Mode(className: 'comment', begin: '{', end: '}'),
-          Mode(className: 'number', begin: '\\b\\d+(\\.\\d+)?\\b'),
-          Mode(className: 'operator', begin: '<-|:=|=|<|>|≠|\\+|-|\\*|\\^|/|\\.\\.'),
-        ],
-      ),
+      language: SenAlgoMode.grammaire,
       modifiers: [
         const SenAlgoEnterModifier(),
         ...CodeController.defaultCodeModifiers.where((m) => m.char != '\n'),
@@ -87,7 +74,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       final enterIntentType = _codeController.actions.keys.firstWhere((k) => k.toString() == 'EnterKeyIntent');
       _codeController.actions[enterIntentType] = CallbackAction<Intent>(
         onInvoke: (intent) {
-          if (_codeController.popupController.shouldShow) {
+          if (_completionApplicable()) {
             _codeController.insertSelectedWord();
             return null;
           }
@@ -107,8 +94,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       final tabIntentType = _codeController.actions.keys.firstWhere((k) => k.toString() == 'TabKeyIntent');
       _codeController.actions[tabIntentType] = CallbackAction<Intent>(
         onInvoke: (intent) {
-          final word = _codeController.value.wordAtCursor;
-          if (_codeController.popupController.shouldShow && word != null && word.isNotEmpty) {
+          if (_completionApplicable()) {
             _codeController.insertSelectedWord();
             return null;
           }
@@ -137,6 +123,28 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     _reprendreProgramme();
   }
 
+  /// Une complétion peut-elle s'appliquer sans risque ?
+  ///
+  /// `insertSelectedWord` remplace tout le mot sous le curseur par la
+  /// suggestion retenue. Or le popup garde ses suggestions après avoir été
+  /// masqué, et `shouldShow` est un drapeau séparé : validé au mauvais moment,
+  /// il écrasait un mot du programme par un autre sans rapport. On exige donc
+  /// que la suggestion prolonge vraiment ce qui vient d'être tapé.
+  bool _completionApplicable() {
+    if (!_codeController.popupController.shouldShow) return false;
+    final mot = _codeController.value.wordAtCursor;
+    if (mot == null || mot.isEmpty) return false;
+    final String suggestion;
+    try {
+      suggestion = _codeController.popupController.getSelectedWord();
+    } catch (_) {
+      // Liste jamais remplie ou index hors bornes : rien à insérer.
+      return false;
+    }
+    return suggestion.isNotEmpty &&
+        suggestion.toLowerCase().startsWith(mot.toLowerCase());
+  }
+
   /// Recharge le programme de la session précédente, s'il y en a un.
   ///
   /// La lecture du stockage est asynchrone : l'utilisateur peut donc avoir
@@ -146,7 +154,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final source = await AutoSaveService.reprendre();
     if (source == null || !mounted) return;
     if (_codeController.text != _programmeInitial) return;
-    _codeController.text = source;
+    // `fullText` et non `text` : le second traite l'affectation comme une
+    // frappe et diffe l'ancien texte avec le nouveau, ce qui rendait un
+    // fragment au lieu du programme.
+    _codeController.fullText = source;
   }
 
   /// Analyse (approximative, par expressions régulières) le texte du
@@ -273,23 +284,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final executionState = ref.watch(executionProvider);
 
     ref.listen<ExecutionState>(executionProvider, (previous, next) {
-      if (next.status == ExecutionStatus.error) {
-        if (mounted) setState(() => _autoPlayEnabled = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(child: Text(next.errorMessage ?? "Erreur inconnue")),
-              ],
-            ),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } else if (next.status == ExecutionStatus.finished || next.status == ExecutionStatus.stopped) {
-        if (mounted) setState(() => _autoPlayEnabled = false);
+      const terminees = {
+        ExecutionStatus.error,
+        ExecutionStatus.finished,
+        ExecutionStatus.stopped,
+      };
+      if (terminees.contains(next.status) && mounted) {
+        setState(() => _autoPlayEnabled = false);
       }
     });
 
@@ -381,19 +382,22 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   color: Colors.black,
                   border: Border(top: BorderSide(color: Colors.white10)),
                 ),
+                // Pas de badge de diagnostics ici : sur écran large l'éditeur
+                // est toujours visible, et le sien dit déjà la même chose.
                 child: Row(
                   children: [
                     _buildStatusIndicator(executionState.status),
                     const SizedBox(width: 8),
-                    Text(
-                      _getStatusMessage(executionState),
-                      style: TextStyle(
-                        color: _getStatusColor(executionState.status),
-                        fontSize: 11,
+                    Flexible(
+                      child: Text(
+                        _getStatusMessage(executionState),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _getStatusColor(executionState.status),
+                          fontSize: 11,
+                        ),
                       ),
                     ),
-                    const Spacer(),
-                    Flexible(child: _buildDiagnosticsBadge()),
                   ],
                 ),
               ),
@@ -476,7 +480,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   void _createNewFile() {
-    _codeController.text = """ALGORITHME NomDeLAlgorithme
+    _codeController.fullText = """ALGORITHME NomDeLAlgorithme
 CONSTANTES
   // Définissez vos constantes ici (ex: PI = 3.14)
 
