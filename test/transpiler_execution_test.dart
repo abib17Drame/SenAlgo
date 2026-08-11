@@ -186,4 +186,109 @@ DEBUT
 FIN
 ''');
   });
+
+  group('DIV et MOD avec des opérandes négatifs', () {
+    // Régression : DIV se traduisait par // et MOD par % de Python, qui
+    // arrondissent vers moins l'infini et suivent le signe du diviseur. DIV
+    // tronque vers zéro et MOD reste toujours positif (comme ~/ et % de
+    // Dart, que suit l'interprète) : les deux ne coïncidaient que pour des
+    // opérandes positifs, jamais exercés par les autres tests de ce fichier.
+
+    test('DIV, dividende négatif', () async {
+      await memeResultat('DIV dividende négatif', '''
+ALGORITHME T
+VARIABLES a : entier
+DEBUT
+  a <- (-7) DIV 2
+  ecrire(a)
+FIN
+''');
+    });
+
+    test('DIV, diviseur négatif', () async {
+      await memeResultat('DIV diviseur négatif', '''
+ALGORITHME T
+VARIABLES a : entier
+DEBUT
+  a <- 7 DIV (-2)
+  ecrire(a)
+FIN
+''');
+    });
+
+    test('DIV, dividende et diviseur négatifs', () async {
+      await memeResultat('DIV deux négatifs', '''
+ALGORITHME T
+VARIABLES a : entier
+DEBUT
+  a <- (-7) DIV (-2)
+  ecrire(a)
+FIN
+''');
+    });
+
+    test('MOD, diviseur négatif', () async {
+      await memeResultat('MOD diviseur négatif', '''
+ALGORITHME T
+VARIABLES a : entier
+DEBUT
+  a <- 7 MOD (-3)
+  ecrire(a)
+FIN
+''');
+    });
+
+    test('MOD, dividende négatif', () async {
+      await memeResultat('MOD dividende négatif', '''
+ALGORITHME T
+VARIABLES a : entier
+DEBUT
+  a <- (-7) MOD 3
+  ecrire(a)
+FIN
+''');
+    });
+
+    test('MOD, dividende et diviseur négatifs', () async {
+      await memeResultat('MOD deux négatifs', '''
+ALGORITHME T
+VARIABLES a : entier
+DEBUT
+  a <- (-7) MOD (-3)
+  ecrire(a)
+FIN
+''');
+    });
+
+    test('DIV et MOD, opérandes positifs : non-régression', () async {
+      await memeResultat('DIV/MOD positifs', '''
+ALGORITHME T
+VARIABLES a, b : entier
+DEBUT
+  a <- 17 DIV 5
+  b <- 17 MOD 5
+  ecrire(a, " ", b)
+FIN
+''');
+    });
+  });
+
+  test('entier(x) : conversion d\'un réel, y compris négatif', () async {
+    // Régression : 'entier' est le mot réservé du type ET le nom de cette
+    // fonction intégrée ; 'entier(x)' ne passait pas l'analyse syntaxique,
+    // donc ce chemin (parseur, analyse sémantique, interprète, transpileur)
+    // n'avait jamais été exercé de bout en bout.
+    await memeResultat('entier() sur un réel positif et un réel négatif', '''
+ALGORITHME T
+VARIABLES x, y : reel
+VARIABLES a, b : entier
+DEBUT
+  x <- 3.9
+  y <- -3.9
+  a <- entier(x)
+  b <- entier(y)
+  ecrire(a, " ", b)
+FIN
+''');
+  });
 }

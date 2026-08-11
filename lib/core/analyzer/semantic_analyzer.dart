@@ -733,6 +733,21 @@ class SemanticAnalyzer implements ASTVisitor<TypeSenAlgo> {
       return TypeSenAlgo.reel;
     }
 
+    // 'entier' convertit vers un entier : un réel (troncature), ou un texte
+    // (l'interpréteur y lit un nombre, 0 si la conversion échoue). Plus
+    // permissif que 'abs'/'racine', qui n'acceptent que des nombres.
+    if (nomMinuscule == 'entier') {
+      final t = node.arguments.isEmpty ? TypeSenAlgo.inconnu : node.arguments.first.accept(this);
+      final accepte = t.base == TypeBase.entier ||
+          t.base == TypeBase.reel ||
+          t.base == TypeBase.chaine ||
+          t.base == TypeBase.caractere;
+      if (t.estConnu && !accepte) {
+        _erreur("'entier' convertit un nombre ou un texte, pas ${_article(t)}.", node.anchor);
+      }
+      return TypeSenAlgo.entier;
+    }
+
     // Accès à un tableau écrit avec des parenthèses : t(i).
     final variable = _portee.chercher(nom);
     if (variable != null && variable.estTableau) {

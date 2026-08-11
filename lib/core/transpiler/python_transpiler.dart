@@ -13,6 +13,15 @@ import '../lexer/token.dart';
 ///   moment de la déclaration ; si une borne ne peut pas être déterminée
 ///   (tableau paramètre sans bornes explicites), on suppose un indice déjà
 ///   basé sur 0.
+/// - DIV et MOD ne sont pas traduits par les opérateurs natifs `//` et `%`
+///   de Python : ceux-ci arrondissent vers moins l'infini et suivent le
+///   signe du diviseur, alors que l'interprète SenAlgo (dont le comportement
+///   fait référence) tronque vers zéro et rend un reste toujours positif ou
+///   nul, comme les opérateurs `~/` et `%` de Dart. Les deux ne s'accordent
+///   que si les opérandes sont positifs. Les fonctions auxiliaires
+///   `_div_entiere`/`_mod_entier`, émises dans le préambule du fichier
+///   généré (voir [visitProgram]), reproduisent le comportement de Dart pour
+///   que les deux exécutions coïncident aussi sur des opérandes négatifs.
 class PythonTranspiler implements ASTVisitor<String> {
   final StringBuffer _out = StringBuffer();
   int _indentLevel = 0;
@@ -124,6 +133,26 @@ class PythonTranspiler implements ASTVisitor<String> {
     _out.writeln();
     _out.writeln('def _lire_booleen(s):');
     _out.writeln("    return s.strip().lower() in ('vrai', 'true', '1')");
+    _out.writeln();
+    _out.writeln('def _div_entiere(a, b):');
+    _out.writeln('    # DIV tronque vers zero, comme le ~/ de Dart utilise par l\'interprete');
+    _out.writeln('    # SenAlgo. Le // de Python arrondit vers moins l\'infini : les deux ne');
+    _out.writeln('    # s\'accordent que si a et b ont le meme signe.');
+    _out.writeln('    # Exemple : -7 DIV 2 vaut -3, alors que -7 // 2 vaudrait -4 en Python.');
+    _out.writeln('    q = a // b');
+    _out.writeln('    if a % b != 0 and (a < 0) != (b < 0):');
+    _out.writeln('        q += 1');
+    _out.writeln('    return q');
+    _out.writeln();
+    _out.writeln('def _mod_entier(a, b):');
+    _out.writeln('    # MOD est toujours positif ou nul, comme le % de Dart utilise par');
+    _out.writeln('    # l\'interprete SenAlgo. Le % de Python suit le signe du diviseur : les');
+    _out.writeln('    # deux ne s\'accordent que si b est positif.');
+    _out.writeln('    # Exemple : 7 MOD -3 vaut 1, alors que 7 % -3 vaudrait -2 en Python.');
+    _out.writeln('    r = a % b');
+    _out.writeln('    if r < 0:');
+    _out.writeln('        r += abs(b)');
+    _out.writeln('    return r');
     _out.writeln();
 
     for (final decl in node.declarations) {
@@ -538,14 +567,17 @@ class PythonTranspiler implements ASTVisitor<String> {
   String visitBinary(BinaryNode node) {
     final l = node.left.accept(this);
     final r = node.right.accept(this);
+    // DIV et MOD passent par des fonctions auxiliaires plutot que par les
+    // operateurs infixes // et % de Python : voir la note en tete de fichier
+    // sur _div_entiere/_mod_entier.
+    if (node.operator.type == TokenType.DIV) return '_div_entiere($l, $r)';
+    if (node.operator.type == TokenType.MOD) return '_mod_entier($l, $r)';
     String op;
     switch (node.operator.type) {
       case TokenType.PLUS: op = '+'; break;
       case TokenType.MOINS: op = '-'; break;
       case TokenType.FOIS: op = '*'; break;
       case TokenType.DIVISE: op = '/'; break;
-      case TokenType.DIV: op = '//'; break;
-      case TokenType.MOD: op = '%'; break;
       case TokenType.PUISSANCE: op = '**'; break;
       case TokenType.EGAL: op = '=='; break;
       case TokenType.DIFFERENT: op = '!='; break;

@@ -648,10 +648,16 @@ class Parser {
     if (_match(TokenType.CARACTERE)) {
       return LiteralNode(value: _previous().literal, estCaractere: true)..anchor = _previous();
     }
-    if (_match(TokenType.IDENTIFIANT) || 
-        _match(TokenType.ECRIRE) || _match(TokenType.AFFICHER) || 
+    if (_match(TokenType.IDENTIFIANT) ||
+        _match(TokenType.ECRIRE) || _match(TokenType.AFFICHER) ||
         _match(TokenType.LIRE) || _match(TokenType.SAISIR) ||
-        _match(TokenType.ECRIRELN) || _match(TokenType.AFFICHERLN)) {
+        _match(TokenType.ECRIRELN) || _match(TokenType.AFFICHERLN) ||
+        // « entier » est à la fois le mot réservé du type et le nom de la
+        // fonction intégrée de conversion (voir README, « Fonctions
+        // intégrées »). Sans ce cas, le jeton lu ici est TokenType.T_ENTIER,
+        // qu'aucune des branches ci-dessus ne reconnaît : « entier(x) » ne
+        // pouvait jamais devenir un appel, quelle que soit la suite.
+        _match(TokenType.T_ENTIER)) {
       final token = _previous();
       // Special case for lire/saisir as an expression without parents
       if ((token.type == TokenType.LIRE || token.type == TokenType.SAISIR) && !_check(TokenType.PAREN_OUVRANTE)) {

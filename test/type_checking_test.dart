@@ -409,6 +409,25 @@ FIN
     test('abs sur une chaîne est refusée en français', () async {
       expect(await _erreurExecution('n <- abs(s)'), contains("'abs' s'applique à un nombre"));
     });
+
+    // Régression : 'entier' est à la fois le mot réservé du type et le nom
+    // de cette fonction. Avant la correction du parseur, 'entier(x)' ne
+    // passait même pas l'analyse syntaxique et n'atteignait jamais ce qui
+    // suit.
+    test('entier sur un réel ou une chaîne ne déclenche rien : conversion valide', () {
+      expect(_erreurs('n <- entier(r)'), isEmpty);
+      expect(_erreurs('n <- entier(s)'), isEmpty);
+    });
+
+    test('entier sur un booléen est une erreur sémantique', () {
+      final erreurs = _erreurs('n <- entier(b)');
+      expect(erreurs, hasLength(1));
+      expect(erreurs.single.message, contains("'entier' convertit un nombre ou un texte"));
+    });
+
+    test('entier sur un booléen est aussi refusée à l\'exécution, en français', () async {
+      expect(await _erreurExecution('n <- entier(b)'), contains("'entier' s'applique à un nombre"));
+    });
   });
 
   group('saisie au clavier', () {

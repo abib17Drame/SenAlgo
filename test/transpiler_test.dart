@@ -135,24 +135,62 @@ FIN
     expect(py, contains('b = Doubler(a, b)'));
   });
 
-  test('Les opérateurs booléens et la division entière sont traduits', () {
+  test('Les opérateurs booléens sont traduits', () {
+    final py = versPython('''
+ALGORITHME Ops
+VARIABLES a, b, c : entier
+DEBUT
+  SI a > 0 ET NON (b = 0) OU c ≠ 1 ALORS
+    ecrire("ok")
+  FINSI
+FIN
+''');
+    expect(py, contains('and'));
+    expect(py, contains('not'));
+    expect(py, contains('or'));
+    expect(py, contains('!='));
+  });
+
+  test('DIV et MOD passent par des fonctions auxiliaires, pas par // et %', () {
+    // // et % de Python arrondissent vers moins l'infini et suivent le signe
+    // du diviseur : ils ne coïncident avec DIV/MOD (troncature vers zéro,
+    // reste toujours positif) que pour des opérandes positifs. Voir
+    // transpiler_execution_test.dart pour la preuve par l'exécution, avec des
+    // opérandes négatifs.
     final py = versPython('''
 ALGORITHME Ops
 VARIABLES a, b, c : entier
 DEBUT
   c <- a DIV b
   c <- a MOD b
-  SI a > 0 ET NON (b = 0) OU c ≠ 1 ALORS
-    ecrire("ok")
-  FINSI
 FIN
 ''');
-    expect(py, contains('c = (a // b)'));
-    expect(py, contains('c = (a % b)'));
-    expect(py, contains('and'));
-    expect(py, contains('not'));
-    expect(py, contains('or'));
-    expect(py, contains('!='));
+    expect(py, contains('def _div_entiere(a, b):'));
+    expect(py, contains('def _mod_entier(a, b):'));
+    expect(py, contains('c = _div_entiere(a, b)'));
+    expect(py, contains('c = _mod_entier(a, b)'));
+    // L'affectation traduite n'utilise plus les opérateurs natifs de Python.
+    // (`a // b` et `a % b` réapparaissent, légitimement, à l'intérieur même
+    // des fonctions auxiliaires : c'est le calcul qui corrige leur écart
+    // avec DIV/MOD, pas ce qu'on cherche à exclure ici.)
+    expect(py, isNot(contains('c = a // b')));
+    expect(py, isNot(contains('c = a % b')));
+  });
+
+  test("entier(x) se traduit par un appel à int, désormais atteignable", () {
+    // 'entier' est à la fois un mot réservé du langage et le nom de cette
+    // fonction intégrée : avant la correction du parseur, ce programme ne
+    // passait même pas l'analyse syntaxique et ce chemin de traduction
+    // n'était jamais exercé.
+    final py = versPython('''
+ALGORITHME Conversion
+VARIABLES x : reel
+VARIABLES y : entier
+DEBUT
+  y <- entier(x)
+FIN
+''');
+    expect(py, contains('y = int(x)'));
   });
 
   test('Les apostrophes des chaînes sont échappées', () {

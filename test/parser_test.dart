@@ -107,6 +107,29 @@ FIN
     });
   });
 
+  test("entier(x) est reconnu comme un appel, pas une erreur de syntaxe", () {
+    // Régression : 'entier' est à la fois le mot réservé du type et le nom
+    // de la fonction intégrée de conversion (voir README, « Fonctions
+    // intégrées »). Le lexeur produit un jeton T_ENTIER pour les deux usages
+    // : sans le cas dédié dans _primary(), 'entier(x)' levait « Expression
+    // attendue » avant même d'atteindre l'analyse sémantique.
+    const source = '''
+ALGORITHME T
+VARIABLES x : reel
+DEBUT
+  x <- 3.7
+  ecrire(entier(x))
+FIN
+''';
+    final tokens = Lexer(source).scanTokens();
+    final program = Parser(tokens).parse();
+    final appelEcrire = (program.body.statements[1] as ExpressionStmtNode).expression as CallNode;
+    expect(appelEcrire.callee, equals('ecrire'));
+    final appelEntier = appelEcrire.arguments.single as CallNode;
+    expect(appelEntier.callee, equals('entier'));
+    expect(appelEntier.arguments, hasLength(1));
+  });
+
   group('Signature de fonction', () {
     test('sans type de retour, le message dit quoi écrire', () {
       const source = '''

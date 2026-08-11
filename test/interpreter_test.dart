@@ -154,6 +154,64 @@ FIN
     expect(output, equals("avant"));
   });
 
+  group('DIV et MOD sur des opérandes négatifs', () {
+    // Documente le comportement de référence de l'interprète, que le
+    // transpileur Python doit désormais reproduire (~/ et % de Dart : DIV
+    // tronque vers zéro, MOD est toujours positif ou nul). Voir
+    // test/transpiler_execution_test.dart pour la comparaison avec le Python
+    // généré.
+    test('DIV tronque vers zéro', () async {
+      const source = '''
+ALGORITHME T
+VARIABLES a, b, c : entier
+DEBUT
+  a <- (-7) DIV 2
+  b <- 7 DIV (-2)
+  c <- (-7) DIV (-2)
+  ecrire(a, " ", b, " ", c)
+FIN
+''';
+      String output = "";
+      final program = Parser(Lexer(source).scanTokens()).parse();
+      await Interpreter(onPrint: (m) => output += m, onRead: () async => "").interpret(program);
+      expect(output, equals("-3 -3 3"));
+    });
+
+    test('MOD rend toujours un reste positif ou nul', () async {
+      const source = '''
+ALGORITHME T
+VARIABLES a, b, c : entier
+DEBUT
+  a <- 7 MOD (-3)
+  b <- (-7) MOD 3
+  c <- (-7) MOD (-3)
+  ecrire(a, " ", b, " ", c)
+FIN
+''';
+      String output = "";
+      final program = Parser(Lexer(source).scanTokens()).parse();
+      await Interpreter(onPrint: (m) => output += m, onRead: () async => "").interpret(program);
+      expect(output, equals("1 2 2"));
+    });
+  });
+
+  test('entier(x) tronque un réel vers zéro, y compris négatif', () async {
+    const source = '''
+ALGORITHME T
+VARIABLES x : reel
+VARIABLES y : entier
+DEBUT
+  x <- -3.7
+  y <- entier(x)
+  ecrire(y)
+FIN
+''';
+    String output = "";
+    final program = Parser(Lexer(source).scanTokens()).parse();
+    await Interpreter(onPrint: (m) => output += m, onRead: () async => "").interpret(program);
+    expect(output, equals("-3"));
+  });
+
   group('Sous-programmes', () {
     Future<String> executer(String source) async {
       var sortie = '';
