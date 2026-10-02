@@ -17,7 +17,7 @@ class ExecutionStatusDot extends StatelessWidget {
   static Color couleurPour(ExecutionStatus status) {
     switch (status) {
       case ExecutionStatus.idle:
-        return Colors.grey;
+        return SenAlgoTheme.muted;
       case ExecutionStatus.running:
         return SenAlgoTheme.neonGreen;
       case ExecutionStatus.stepping:
@@ -25,11 +25,11 @@ class ExecutionStatusDot extends StatelessWidget {
       case ExecutionStatus.waitingForInput:
         return SenAlgoTheme.neonYellow;
       case ExecutionStatus.error:
-        return Colors.red;
+        return const Color(0xFFFF9B9B);
       case ExecutionStatus.finished:
         return SenAlgoTheme.neonCyan;
       case ExecutionStatus.stopped:
-        return Colors.orangeAccent;
+        return SenAlgoTheme.neonYellow;
     }
   }
 

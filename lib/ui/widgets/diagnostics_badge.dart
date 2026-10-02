@@ -80,8 +80,8 @@ class DiagnosticsBadge extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icone, size: 14, color: couleur),
-            const SizedBox(width: 4),
+            Icon(icone, size: 17, color: couleur),
+            const SizedBox(width: 8),
             // `Flexible` est indispensable : sans lui, le message d'erreur
             // prend sa largeur naturelle et déborde du panneau (l'ellipsis
             // seule ne suffit pas, elle n'agit que sous contrainte).
@@ -90,7 +90,7 @@ class DiagnosticsBadge extends StatelessWidget {
                 texte,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   color: aUneErreur ? Colors.redAccent : (aDesAvertissements ? couleur : Colors.grey),
                 ),
               ),

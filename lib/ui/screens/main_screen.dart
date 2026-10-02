@@ -6,7 +6,6 @@ import '../../state/execution_provider.dart';
 import '../../state/diagnostics_provider.dart';
 import '../theme.dart';
 import '../editor_highlight.dart';
-import '../examples/example_programs.dart';
 import '../editor/senalgo_enter_modifier.dart';
 import '../widgets/resizable_split_view.dart';
 import '../widgets/execution_status_view.dart';
@@ -16,6 +15,8 @@ import '../widgets/console_panel.dart';
 import '../widgets/variables_panel.dart';
 import '../widgets/app_toolbar.dart';
 import '../dialogs/python_translation_dialog.dart';
+import '../dialogs/examples_dialog.dart';
+import '../dialogs/language_guide.dart';
 import '../services/algo_file_service.dart';
 import '../services/auto_save_service.dart';
 
@@ -275,7 +276,59 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       error: diagnostics.error,
       errorLine: diagnostics.errorLine,
       warnings: diagnostics.warnings,
-      onTap: _jumpToDiagnosticLine,
+      onTap: _showDiagnostics,
+    );
+  }
+
+  void _showDiagnostics() {
+    final diagnostics = ref.read(diagnosticsProvider);
+    _jumpToDiagnosticLine();
+    FocusManager.instance.primaryFocus?.unfocus();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: const BoxConstraints(maxWidth: 640),
+      builder: (sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.75),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Row(children: [
+              const Expanded(child: Text('Diagnostics du programme', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700))),
+              IconButton(tooltip: 'Fermer les diagnostics', onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
+            ]),
+            const SizedBox(height: 8),
+            const Text('Le curseur est placé sur la première ligne signalée.', style: TextStyle(color: SenAlgoTheme.muted, fontSize: 13, height: 1.5)),
+            const SizedBox(height: 16),
+            if (diagnostics.error != null)
+              _diagnosticCard(diagnostics.error!, true)
+            else
+              for (final diagnostic in diagnostics.warnings)
+                _diagnosticCard(diagnostic.toString(), diagnostic.estErreur),
+            const SizedBox(height: 12),
+            SizedBox(width: double.infinity, child: ElevatedButton.icon(
+              onPressed: () { Navigator.pop(sheetContext); setState(() => _selectedTabIndex = 0); },
+              icon: const Icon(Icons.edit_outlined, size: 18), label: const Text('Revenir au code'),
+            )),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _diagnosticCard(String message, bool error) {
+    final color = error ? const Color(0xFFFF9B9B) : SenAlgoTheme.neonYellow;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withValues(alpha: 0.2))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(error ? Icons.error_outline_rounded : Icons.warning_amber_rounded, color: color, size: 20),
+        const SizedBox(width: 12),
+        Expanded(child: SelectableText(message, style: const TextStyle(fontSize: 13, height: 1.6))),
+      ]),
     );
   }
 
@@ -289,6 +342,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         ExecutionStatus.finished,
         ExecutionStatus.stopped,
       };
+      if (next.status == ExecutionStatus.waitingForInput &&
+          MediaQuery.sizeOf(context).width < 800 && mounted) {
+        setState(() => _selectedTabIndex = 1);
+      }
       if (terminees.contains(next.status) && mounted) {
         setState(() => _autoPlayEnabled = false);
       }
@@ -300,9 +357,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 800;
-        // En dessous de ce seuil, même la barre d'outils « mobile » ne tient
-        // plus en largeur : les boutons d'action passent en icône seule.
+        // Le sous-titre de marque laisse la place aux outils sur petit écran.
         final isCompact = constraints.maxWidth < 420;
+        final isTablet = constraints.maxWidth >= 600 && isMobile;
+        final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
         return Scaffold(
           appBar: AppToolbar(
@@ -316,6 +374,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             onNewFile: _createNewFile,
             onClearCode: () => _codeController.clear(),
             onShowPython: _showPythonTranslation,
+            onShowHelp: () => showLanguageGuide(context),
             onStop: () {
               setState(() => _autoPlayEnabled = false);
               // Débloque le pas-à-pas ou l'attente de saisie...
@@ -331,75 +390,99 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             },
             onToggleAutoPlay: _toggleAutoPlay,
             onRunStepByStep: () {
+              FocusManager.instance.primaryFocus?.unfocus();
               Runner(ref).run(_codeController.text, stepByStep: true);
-              if (isMobile) setState(() => _selectedTabIndex = 1);
+              if (isMobile) setState(() => _selectedTabIndex = 0);
             },
             onRun: () {
+              FocusManager.instance.primaryFocus?.unfocus();
               Runner(ref).run(_codeController.text);
               if (isMobile) setState(() => _selectedTabIndex = 1);
             },
           ),
-          body: isMobile 
-            ? IndexedStack(
-                index: _selectedTabIndex,
-                children: [
-                  _buildEditorPanel(executionState),
-                  _buildConsolePanel(consoleState, executionState),
-                  _buildVariablesPanel(variables),
-                ],
-              )
-            : ResizableSplitView(
-                axis: Axis.horizontal,
-                initialRatio: 0.6,
-                child1: _buildEditorPanel(executionState),
-                child2: _showVariables 
-                  ? ResizableSplitView(
-                      axis: Axis.vertical,
-                      initialRatio: 0.65,
-                      child1: _buildConsolePanel(consoleState, executionState),
-                      child2: _buildVariablesPanel(variables),
-                    )
-                  : _buildConsolePanel(consoleState, executionState),
-              ),
-          bottomNavigationBar: isMobile 
-            ? BottomNavigationBar(
-                currentIndex: _selectedTabIndex,
-                onTap: (index) => setState(() => _selectedTabIndex = index),
-                backgroundColor: Colors.black,
-                selectedItemColor: SenAlgoTheme.neonCyan,
-                unselectedItemColor: Colors.grey,
-                elevation: 10,
-                type: BottomNavigationBarType.fixed,
-                items: const [
-                  BottomNavigationBarItem(icon: Icon(Icons.code), label: 'Code'),
-                  BottomNavigationBarItem(icon: Icon(Icons.terminal), label: 'Console'),
-                  BottomNavigationBarItem(icon: Icon(Icons.memory), label: 'Variables'),
-                ],
-              )
-            : Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                  border: Border(top: BorderSide(color: Colors.white10)),
-                ),
-                // Pas de badge de diagnostics ici : sur écran large l'éditeur
-                // est toujours visible, et le sien dit déjà la même chose.
-                child: Row(
-                  children: [
-                    _buildStatusIndicator(executionState.status),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        _getStatusMessage(executionState),
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _getStatusColor(executionState.status),
-                          fontSize: 11,
+          body: SafeArea(
+            top: false,
+            bottom: false,
+            child: Column(
+              children: [
+                if (isMobile && (executionState.status != ExecutionStatus.idle))
+                  _buildExecutionStrip(executionState),
+                Expanded(child: isMobile
+                  ? Row(children: [
+                      if (isTablet && !keyboardVisible)
+                        NavigationRail(
+                          selectedIndex: _selectedTabIndex,
+                          backgroundColor: SenAlgoTheme.darkBg,
+                          indicatorColor: SenAlgoTheme.neonGreen.withValues(alpha: 0.14),
+                          labelType: NavigationRailLabelType.all,
+                          onDestinationSelected: (index) {
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            setState(() => _selectedTabIndex = index);
+                          },
+                          destinations: const [
+                            NavigationRailDestination(icon: Icon(Icons.code_rounded), label: Text('Code')),
+                            NavigationRailDestination(icon: Icon(Icons.terminal_rounded), label: Text('Console')),
+                            NavigationRailDestination(icon: Icon(Icons.data_object_rounded), label: Text('Variables')),
+                          ],
                         ),
+                      Expanded(child: IndexedStack(
+                        index: _selectedTabIndex,
+                        children: [
+                          _buildEditorPanel(executionState),
+                          _buildConsolePanel(consoleState, executionState),
+                          _buildVariablesPanel(variables),
+                        ],
+                      )),
+                    ])
+                  : Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: ResizableSplitView(
+                        axis: Axis.horizontal,
+                        initialRatio: 0.6,
+                        child1: _buildEditorPanel(executionState),
+                        child2: _showVariables
+                          ? ResizableSplitView(
+                              axis: Axis.vertical, initialRatio: 0.65,
+                              child1: _buildConsolePanel(consoleState, executionState),
+                              child2: _buildVariablesPanel(variables),
+                            )
+                          : _buildConsolePanel(consoleState, executionState),
                       ),
-                    ),
-                  ],
-                ),
+                    )),
+              ],
+            ),
+          ),
+          bottomNavigationBar: isMobile
+            ? (keyboardVisible || isTablet ? null : NavigationBar(
+                selectedIndex: _selectedTabIndex,
+                onDestinationSelected: (index) {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  setState(() => _selectedTabIndex = index);
+                },
+                destinations: [
+                  const NavigationDestination(icon: Icon(Icons.code_rounded), label: 'Code'),
+                  NavigationDestination(
+                    icon: Badge(isLabelVisible: executionState.status == ExecutionStatus.waitingForInput,
+                      smallSize: 8, child: const Icon(Icons.terminal_rounded)),
+                    label: 'Console',
+                  ),
+                  NavigationDestination(icon: Badge(isLabelVisible: variables.isNotEmpty,
+                    label: Text('${variables.length}'), child: const Icon(Icons.data_object_rounded)), label: 'Variables'),
+                ],
+              ))
+            : Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: const BoxDecoration(color: SenAlgoTheme.darkBg, border: Border(top: BorderSide(color: SenAlgoTheme.border))),
+                child: Row(children: [
+                  _buildStatusIndicator(executionState.status),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(_getStatusMessage(executionState), overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: _getStatusColor(executionState.status), fontSize: 12))),
+                  const SizedBox(width: 16),
+                  const Icon(Icons.restore_rounded, color: SenAlgoTheme.muted, size: 16),
+                  const SizedBox(width: 8),
+                  const Text('Reprise automatique', style: TextStyle(color: SenAlgoTheme.muted, fontSize: 11)),
+                ]),
               ),
         );
       }
@@ -454,8 +537,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       final contents = await AlgoFileService.pickAndRead();
       if (contents == null || !mounted) return;
       _codeController.fullText = contents;
+      setState(() => _selectedTabIndex = 0);
       messenger.showSnackBar(
-        const SnackBar(content: Text('Fichier chargé avec succès'), backgroundColor: SenAlgoTheme.neonGreen),
+        const SnackBar(content: Text('Fichier chargé avec succès', style: TextStyle(color: SenAlgoTheme.darkBg)), backgroundColor: SenAlgoTheme.neonGreen),
       );
     } catch (e) {
       messenger.showSnackBar(
@@ -470,7 +554,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     try {
       if (!await AlgoFileService.pickAndWrite(_codeController.text)) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Fichier sauvegardé avec succès'), backgroundColor: SenAlgoTheme.neonGreen),
+        const SnackBar(content: Text('Fichier sauvegardé avec succès', style: TextStyle(color: SenAlgoTheme.darkBg)), backgroundColor: SenAlgoTheme.neonGreen),
       );
     } catch (e) {
       messenger.showSnackBar(
@@ -480,6 +564,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   void _createNewFile() {
+    setState(() => _selectedTabIndex = 0);
     _codeController.fullText = """ALGORITHME NomDeLAlgorithme
 CONSTANTES
   // Définissez vos constantes ici (ex: PI = 3.14)
@@ -495,26 +580,39 @@ FIN""";
 
 
   void _showPythonTranslation() {
+    FocusManager.instance.primaryFocus?.unfocus();
     showPythonTranslationDialog(context, _codeController.text);
   }
 
   Widget _buildExamplesMenu() {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.lightbulb_outline, color: SenAlgoTheme.neonYellow),
+    return IconButton(
+      icon: const Icon(Icons.auto_stories_outlined, color: SenAlgoTheme.neonCyan, size: 21),
       tooltip: 'Exemples',
-      onSelected: (code) {
+      onPressed: () async {
+        FocusManager.instance.primaryFocus?.unfocus();
+        final code = await showExamplesLibrary(context);
+        if (code == null || !mounted) return;
         _codeController.fullText = code;
+        setState(() => _selectedTabIndex = 0);
       },
-      itemBuilder: (context) => [
-        for (final exemple in kExamplePrograms) ...[
-          if (exemple.startsGroup) const PopupMenuDivider(),
-          PopupMenuItem(value: exemple.code, child: Text(exemple.title)),
-        ],
-      ],
     );
   }
 
+  Widget _buildExecutionStrip(ExecutionState state) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(color: SenAlgoTheme.raisedSurface, borderRadius: BorderRadius.circular(12)),
+      child: Row(children: [
+        ExecutionStatusDot(status: state.status),
+        const SizedBox(width: 10),
+        Expanded(child: Text(ExecutionStatusDot.messagePour(state), maxLines: 2,
+          overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, height: 1.5))),
+        if (state.status == ExecutionStatus.stepping && _selectedTabIndex == 0)
+          TextButton(onPressed: () => setState(() => _selectedTabIndex = 2),
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+            child: const Text('Variables', style: TextStyle(fontSize: 12))),
+      ]),
+    );
+  }
 }
-
-
-

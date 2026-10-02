@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'animated_variable_row.dart';
 import 'panel_shell.dart';
+import 'empty_panel.dart';
 
 /// Panneau listant les variables et leur valeur courante.
 ///
@@ -15,8 +16,12 @@ class VariablesPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return PanelShell(
       title: 'Variables',
+      actions: [Padding(padding: const EdgeInsets.all(12), child: Text('${variables.length}', style: const TextStyle(fontSize: 12)))],
       icon: Icons.memory,
-      child: Column(
+      child: variables.isEmpty ? const EmptyPanel(
+        icon: Icons.data_object_rounded, title: 'Vos variables, en direct',
+        description: 'Lancez un programme ou avancez pas à pas pour suivre les valeurs ici.',
+      ) : Column(
         children: [
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
