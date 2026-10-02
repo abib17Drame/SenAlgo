@@ -41,6 +41,20 @@ class _IntentBidon extends Intent {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('Entrée indente un bloc et place le curseur dans son corps', (tester) async {
+    final c = await editeur(tester);
+    c.fullText = 'ALGORITHME T\nDEBUT\n  SI vrai ALORS\nFIN';
+    final offset = c.text.indexOf('ALORS') + 'ALORS'.length;
+    c.selection = TextSelection.collapsed(offset: offset);
+    c.popupController.hide();
+
+    declencher(c, 'EnterKeyIntent');
+    await tester.pump();
+
+    expect(c.text, contains('  SI vrai ALORS\n    \n  FinSi'));
+    expect(c.selection.baseOffset, offset + 5);
+  });
+
   group('Un popup périmé ne réécrit pas le programme', () {
     // insertSelectedWord remplace tout le mot sous le curseur. Le popup garde
     // ses suggestions après avoir été masqué : validées au mauvais moment,

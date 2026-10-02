@@ -100,10 +100,15 @@ class AppToolbar extends StatelessWidget implements PreferredSizeWidget {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(color: SenAlgoTheme.neonGreen.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.data_object_rounded, color: SenAlgoTheme.neonGreen, size: 22),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset(
+              'assets/icon/icon_256.png',
+              width: 36,
+              height: 36,
+              fit: BoxFit.contain,
+              semanticLabel: 'Logo SenAlgo',
+            ),
           ),
           const SizedBox(width: 10),
           Flexible(child: Column(

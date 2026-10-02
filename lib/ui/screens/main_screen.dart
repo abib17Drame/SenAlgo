@@ -83,11 +83,12 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           final text = _codeController.text;
           if (!sel.isValid) return null;
           
-          final newValue = TextEditingValue(
-            text: text.replaceRange(sel.start, sel.end, '\n'),
-            selection: TextSelection.collapsed(offset: sel.start + 1),
+          // Le raccourci doit produire l'indentation et son curseur ensemble,
+          // sans dépendre de la détection d'insertion du package sur le Web.
+          final newValue = const SenAlgoEnterModifier().updateString(
+            text, sel, _codeController.params,
           );
-          _codeController.value = newValue;
+          if (newValue != null) _codeController.value = newValue;
           return null;
         },
       );
