@@ -1,4 +1,7 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:file_picker/file_picker.dart';
 
@@ -19,10 +22,12 @@ class AlgoFileService {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['algo', 'txt'],
+      withData: true,
     );
-    final path = result?.files.single.path;
-    if (path == null) return null;
-    return File(path).readAsString();
+    if (result == null) return null;
+    final bytes = result.files.single.bytes;
+    if (bytes == null) throw StateError('Le fichier sélectionné ne peut pas être lu.');
+    return utf8.decode(bytes);
   }
 
   /// Propose d'enregistrer [content] dans un fichier `.algo`.
@@ -35,10 +40,10 @@ class AlgoFileService {
       fileName: suggestedFileName(content),
       type: FileType.custom,
       allowedExtensions: ['algo'],
+      bytes: Uint8List.fromList(utf8.encode(content)),
     );
-    if (path == null) return false;
-    await File(path).writeAsString(content);
-    return true;
+    // Le navigateur ne fournit aucun chemin après avoir lancé le téléchargement.
+    return kIsWeb || path != null;
   }
 
   /// Nom de fichier proposé par défaut, déduit du nom de l'algorithme déclaré

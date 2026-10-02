@@ -41,6 +41,15 @@ La bibliothèque d’exemples permet de rechercher un programme et de le lire av
 chargement. Les diagnostics s’ouvrent pour consulter les messages complets et
 revenir au code. Un guide du langage est accessible dans les outils.
 
+## Utiliser SenAlgo dans le navigateur
+
+Ouvrez **https://abib17drame.github.io/SenAlgo/** sur ordinateur, tablette ou
+mobile. Vous pouvez importer un fichier `.algo` et télécharger votre programme
+sans installer l’application. Le programme en cours est conservé dans le
+stockage local de ce navigateur.
+
+Le site est mis à jour automatiquement depuis `main` par GitHub Actions.
+
 ## Installation
 
 Il faut [Flutter](https://docs.flutter.dev/get-started/install) (développé avec la 3.41.9, Dart SDK `^3.10.1`).
