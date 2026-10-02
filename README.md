@@ -29,18 +29,30 @@ FIN
 - **19 exemples** prêts à charger, du plus simple aux sous-programmes : procédure avec paramètre, fonction de saisie contrôlée, paramètres `résultat` et `donnée-résultat`.
 - **Ouverture et sauvegarde** de fichiers `.algo`, et **reprise automatique** : le programme en cours est retrouvé au lancement suivant, même après une fermeture brutale.
 
+## Interface
+
+L’interface s’adapte à votre écran : éditeur, console et variables côte à côte
+sur ordinateur, navigation latérale sur tablette et onglets sur téléphone.
+Les outils permettent d’ouvrir, de sauvegarder et de créer un fichier sur tous
+les formats. L’éditeur propose une taille de texte réglable, l’annulation et le
+rétablissement ; sur téléphone, une rangée de symboles facilite la saisie.
+
+La bibliothèque d’exemples permet de rechercher un programme et de le lire avant
+chargement. Les diagnostics s’ouvrent pour consulter les messages complets et
+revenir au code. Un guide du langage est accessible dans les outils.
+
 ## Installation
 
 Il faut [Flutter](https://docs.flutter.dev/get-started/install) (développé avec la 3.41.9, Dart SDK `^3.10.1`).
 
 ```bash
-git clone <url-du-depot>
+git clone https://github.com/abib17Drame/SenAlgo.git
 cd SenAlgo
 flutter pub get
 flutter run          # ou : flutter run -d linux / -d chrome
 ```
 
-Plateformes configurées : **Linux**, **Android** et **Web**.
+Plateformes configurées : **Linux**, **Windows**, **Android** et **Web**.
 
 ## Le langage
 

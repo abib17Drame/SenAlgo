@@ -192,8 +192,17 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: paquets/**/*
-          generate_release_notes: true
+          generate_release_notes: false
           body: |
+            ## Nouveautés
+
+            - Nouvelle interface bleu nuit et menthe sur ordinateur, tablette et mobile.
+            - Navigation adaptée, outils de fichier accessibles sur téléphone et aides de saisie.
+            - Réglages de taille du texte, annulation et rétablissement dans l’éditeur.
+            - Bibliothèque d’exemples avec recherche et aperçu avant chargement.
+            - Diagnostics détaillés et présentation de la traduction Python améliorée.
+            - Correction de `entier(x)` et de la traduction de `DIV` et `MOD` avec des nombres négatifs.
+
             ## Téléchargements
 
             | Plateforme | Fichier |
