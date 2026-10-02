@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
-// Extrait de main_screen.dart lors du decoupage : contenu inchange.
+
 
 class AnimatedVariableRow extends StatefulWidget {
   final String name;
@@ -57,15 +57,15 @@ class _AnimatedVariableRowState extends State<AnimatedVariableRow> with SingleTi
       animation: _colorAnimation,
       builder: (context, child) {
         return Container(
-          color: _colorAnimation.value,
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          decoration: BoxDecoration(color: _colorAnimation.value, borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           child: Row(
             children: [
               Expanded(
                 flex: 2,
                 child: Text(
                   widget.name,
-                  style: const TextStyle(color: SenAlgoTheme.neonCyan, fontSize: 12),
+                  style: const TextStyle(color: SenAlgoTheme.neonCyan, fontSize: 14),
                 ),
               ),
               const SizedBox(width: 8),
@@ -73,7 +73,7 @@ class _AnimatedVariableRowState extends State<AnimatedVariableRow> with SingleTi
                 flex: 3,
                 child: Text(
                   _formatValue(widget.value),
-                  style: const TextStyle(color: SenAlgoTheme.neonGreen, fontSize: 12, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: SenAlgoTheme.neonGreen, fontSize: 14, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.right,
                 ),
               ),

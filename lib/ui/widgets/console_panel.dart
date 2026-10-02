@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../state/execution_provider.dart';
 import '../theme.dart';
 import 'panel_shell.dart';
+import 'empty_panel.dart';
 
 /// Console de sortie du programme, avec la zone de saisie qui apparaît
 /// lorsqu'un `Lire` attend une valeur.
@@ -70,7 +71,7 @@ class _ConsolePanelState extends ConsumerState<ConsolePanel> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(message, style: const TextStyle(color: SenAlgoTheme.darkBg)),
         duration: const Duration(seconds: 2),
         backgroundColor: couleur,
       ),
@@ -88,26 +89,20 @@ class _ConsolePanelState extends ConsumerState<ConsolePanel> {
       actions: [
         if (widget.onToggleVariables != null)
           IconButton(
-            constraints: const BoxConstraints(),
-            padding: const EdgeInsets.all(4),
             icon: Icon(
               widget.showVariables ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-              size: 16,
+              size: 20,
             ),
             onPressed: widget.onToggleVariables,
             tooltip: widget.showVariables ? 'Masquer les variables' : 'Afficher les variables',
           ),
         IconButton(
-          constraints: const BoxConstraints(),
-          padding: const EdgeInsets.all(4),
-          icon: const Icon(Icons.copy, size: 16),
+          icon: const Icon(Icons.copy, size: 20),
           onPressed: _copierConsole,
           tooltip: 'Copier la console',
         ),
         IconButton(
-          constraints: const BoxConstraints(),
-          padding: const EdgeInsets.all(4),
-          icon: const Icon(Icons.delete_outline, size: 16),
+          icon: const Icon(Icons.delete_outline, size: 20),
           onPressed: () => ref.read(consoleProvider.notifier).clear(),
           tooltip: 'Effacer la console',
         ),
@@ -115,13 +110,16 @@ class _ConsolePanelState extends ConsumerState<ConsolePanel> {
       child: Column(
         children: [
           Expanded(
-            child: SelectionArea(
+            child: consoleState.texte.isEmpty ? const EmptyPanel(
+              icon: Icons.terminal_rounded, title: 'Place au résultat',
+              description: 'Exécutez votre programme : ses messages et ses résultats apparaîtront ici.',
+            ) : SelectionArea(
               child: ListView.builder(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(16),
                 itemCount: consoleState.lines.length,
                 itemBuilder: (context, index) => Text(
                   consoleState.lines[index],
-                  style: GoogleFonts.firaCode(color: Colors.white, fontSize: 13),
+                  style: GoogleFonts.firaCode(color: SenAlgoTheme.ink, fontSize: 14, height: 1.6),
                 ),
               ),
             ),
@@ -134,10 +132,10 @@ class _ConsolePanelState extends ConsumerState<ConsolePanel> {
 
   Widget _buildSaisie() {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(12),
       decoration: const BoxDecoration(
-        color: Colors.black26,
-        border: Border(top: BorderSide(color: Colors.white10)),
+        color: SenAlgoTheme.raisedSurface,
+        border: Border(top: BorderSide(color: SenAlgoTheme.border)),
       ),
       child: Row(
         children: [
@@ -146,13 +144,15 @@ class _ConsolePanelState extends ConsumerState<ConsolePanel> {
             child: TextField(
               controller: _saisieController,
               autofocus: true,
-              style: GoogleFonts.firaCode(color: Colors.white, fontSize: 13),
+              style: GoogleFonts.firaCode(color: SenAlgoTheme.ink, fontSize: 14, height: 1.6),
               decoration: const InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
-                hintText: "Saisir une valeur...",
+                filled: false,
+                hintText: "Votre valeur…",
                 hintStyle: TextStyle(color: Colors.grey, fontSize: 13),
               ),
+              textInputAction: TextInputAction.send,
               onSubmitted: _valider,
             ),
           ),

@@ -9,12 +9,7 @@ import '../../core/parser/parser.dart';
 import '../../core/transpiler/python_transpiler.dart';
 import '../theme.dart';
 
-/// Traduit [source] en Python et affiche le résultat dans une boîte de
-/// dialogue, avec un bouton de copie.
-///
-/// Extrait de `main_screen.dart` lors du découpage. Seule différence de
-/// comportement : la largeur, auparavant figée à 700 pixels, s'adapte
-/// désormais aux petits écrans.
+/// La présentation s'adapte à l'écran ; la traduction reste celle du cœur.
 Future<void> showPythonTranslationDialog(BuildContext context, String source) {
   String pythonCode;
   String? error;
@@ -28,82 +23,58 @@ Future<void> showPythonTranslationDialog(BuildContext context, String source) {
   }
 
   final messenger = ScaffoldMessenger.of(context);
-
-  return showDialog(
+  return showDialog<void>(
     context: context,
     builder: (dialogContext) {
-      final tailleEcran = MediaQuery.sizeOf(dialogContext);
-      return Dialog(
-        backgroundColor: SenAlgoTheme.surfaceBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Container(
-          width: math.min(700, tailleEcran.width * 0.9),
-          constraints: BoxConstraints(maxHeight: math.min(600, tailleEcran.height * 0.85)),
-          padding: const EdgeInsets.all(16),
+      final size = MediaQuery.sizeOf(dialogContext);
+      final mobile = size.width < 600;
+      final content = SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(mobile ? 16 : 24),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.code, color: SenAlgoTheme.neonYellow),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Traduction en Python',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.grey),
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (error != null)
-                Text(
-                  'Impossible de traduire : corrige d\'abord les erreurs du programme.\n$error',
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-                )
-              else ...[
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: SelectableText(
-                        pythonCode,
-                        style: GoogleFonts.firaCode(fontSize: 12, color: Colors.white),
-                      ),
-                    ),
-                  ),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: SenAlgoTheme.neonYellow.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.code_rounded, color: SenAlgoTheme.neonYellow, size: 22),
                 ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: pythonCode));
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('Code Python copié !'), duration: Duration(seconds: 2)),
-                      );
-                    },
-                    icon: const Icon(Icons.copy, size: 16),
-                    label: const Text('Copier'),
-                    style: ElevatedButton.styleFrom(backgroundColor: SenAlgoTheme.neonCyan.withValues(alpha: 0.2)),
-                  ),
-                ),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Traduction en Python', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18))),
+                IconButton(tooltip: 'Fermer la traduction', icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(dialogContext)),
+              ]),
+              const SizedBox(height: 12),
+              const Text('Le même algorithme, dans un autre langage.', style: TextStyle(color: SenAlgoTheme.muted, fontSize: 13, height: 1.6)),
+              const SizedBox(height: 20),
+              Expanded(child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: SenAlgoTheme.darkBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: SenAlgoTheme.border)),
+                child: SingleChildScrollView(child: SelectableText(
+                  error != null ? 'Impossible de traduire : corrigez d’abord les erreurs du programme.\n\n$error' : pythonCode,
+                  style: GoogleFonts.firaCode(fontSize: 13, height: 1.7, color: error != null ? const Color(0xFFFF9B9B) : SenAlgoTheme.ink),
+                )),
+              )),
+              if (error == null) ...[
+                const SizedBox(height: 16),
+                SizedBox(width: double.infinity, child: ElevatedButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: pythonCode));
+                    messenger.showSnackBar(const SnackBar(content: Text('Code Python copié !'), duration: Duration(seconds: 2)));
+                  },
+                  icon: const Icon(Icons.copy_rounded, size: 18), label: const Text('Copier le code Python'),
+                )),
               ],
             ],
           ),
         ),
+      );
+      if (mobile) return Dialog.fullscreen(backgroundColor: SenAlgoTheme.surfaceBg, child: content);
+      return Dialog(
+        backgroundColor: SenAlgoTheme.surfaceBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: SizedBox(width: math.min(800, size.width * 0.88), height: math.min(720, size.height * 0.85), child: content),
       );
     },
   );
