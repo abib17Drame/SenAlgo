@@ -20,7 +20,10 @@
 
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+
+import 'web_indent_formatter.dart';
 import 'package:flutter/services.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 
@@ -444,6 +447,7 @@ class _WrappingCodeFieldState extends State<WrappingCodeField> {
 
     final codeField = TextField(
       focusNode: _focusNode,
+      inputFormatters: kIsWeb ? [WebIndentFormatter(widget.controller.params)] : null,
       scrollPadding: widget.padding,
       style: textStyle,
       smartDashesType: widget.smartDashesType,
