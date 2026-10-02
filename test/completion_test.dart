@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:senalgo/main.dart';
@@ -49,6 +50,22 @@ void main() {
     c.popupController.hide();
 
     declencher(c, 'EnterKeyIntent');
+    await tester.pump();
+
+    expect(c.text, contains('  SI vrai ALORS\n    \n  FinSi'));
+    expect(c.selection.baseOffset, offset + 5);
+  });
+
+  testWidgets('Entrée au clavier conserve le curseur dans le bloc indenté', (tester) async {
+    final c = await editeur(tester);
+    c.fullText = 'ALGORITHME T\nDEBUT\n  SI vrai ALORS\nFIN';
+    final offset = c.text.indexOf('ALORS') + 5;
+    await tester.tap(find.byType(TextField).first);
+    c.selection = TextSelection.collapsed(offset: offset);
+    c.popupController.hide();
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
 
     expect(c.text, contains('  SI vrai ALORS\n    \n  FinSi'));

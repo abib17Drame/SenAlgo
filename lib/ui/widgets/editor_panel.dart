@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
@@ -128,7 +129,7 @@ class _EditorPanelState extends State<EditorPanel> {
                   cursorColor: SenAlgoTheme.neonGreen,
                   padding: const EdgeInsets.only(top: 8, right: 16, bottom: 24),
                   expands: true, wrap: widget.wrapLines,
-                  gutterStyle: GutterStyle(width: mobile ? 42 : 54, margin: 8, textStyle: const TextStyle(color: SenAlgoTheme.muted)),
+                  gutterStyle: GutterStyle(width: kIsWeb ? 70 : (mobile ? 42 : 54), margin: 8, textStyle: const TextStyle(color: SenAlgoTheme.muted)),
                   lineNumberBuilder: (line, style) => TextSpan(
                     text: widget.debugLine == line ? '▶ $line' : '$line',
                     style: widget.debugLine == line ? (style ?? const TextStyle()).copyWith(

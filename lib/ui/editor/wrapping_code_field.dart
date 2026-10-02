@@ -300,6 +300,23 @@ class _WrappingCodeFieldState extends State<WrappingCodeField> {
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    // Sur le Web, Entrée ne doit pas être traité à la fois par le DOM et
+    // par le raccourci Flutter : la sélection native écraserait le curseur
+    // placé dans le bloc. Le champ consomme l'événement après son action.
+    if (kIsWeb &&
+        (event is KeyDownEvent || event is KeyRepeatEvent) &&
+        event.logicalKey == LogicalKeyboardKey.enter &&
+        !HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isAltPressed &&
+        !HardwareKeyboard.instance.isMetaPressed &&
+        widget.controller.value.composing.isCollapsed) {
+      final action = widget.controller.actions[EnterKeyIntent];
+      if (action != null) {
+        // ignore: invalid_use_of_protected_member
+        action.invoke(const EnterKeyIntent());
+        return KeyEventResult.handled;
+      }
+    }
     return widget.controller.onKey(event);
   }
 
